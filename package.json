@@ -10,7 +10,7 @@
     "seed": "node tools/seed.mjs",
     "export": "node tools/export.mjs",
     "import": "node tools/import-from-azure.mjs",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview"
   },
   "dependencies": {
