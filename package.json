@@ -1,10 +1,15 @@
 {
-  "name": "hwpl-webapp",
+  "name": "hwpl-manager",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n web,api -c blue,green \"vite\" \"node tools/admin-server.mjs\"",
+    "dev:web": "vite",
+    "dev:api": "node tools/admin-server.mjs",
+    "seed": "node tools/seed.mjs",
+    "export": "node tools/export.mjs",
+    "import": "node tools/import-from-azure.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -16,6 +21,9 @@
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^11.8.1",
+    "concurrently": "^9.1.2",
+    "express": "^4.21.2",
     "typescript": "^5.6.3",
     "vite": "^8.0.11"
   }

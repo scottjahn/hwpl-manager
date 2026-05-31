@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicMatch, RecentMatch, SessionCourtEntry, StatsRow } from "./types";
+import { statsUrl, sessionUrl } from "./dataSource";
 
 interface StatAccumulator {
   gamesPlayed: number;
@@ -958,11 +959,11 @@ function App() {
 
   const loadStats = useCallback(async () => {
     const [psRes, tsRes, rmRes, sdRes, pmRes] = await Promise.all([
-      fetch("/api/stats/players"),
-      fetch("/api/stats/teams"),
-      fetch("/api/stats/matches"),
-      fetch("/api/stats/session-dates"),
-      fetch("/api/stats/matches-full")
+      fetch(statsUrl("players")),
+      fetch(statsUrl("teams")),
+      fetch(statsUrl("matches")),
+      fetch(statsUrl("session-dates")),
+      fetch(statsUrl("matches-full"))
     ]);
 
     if (!psRes.ok || !tsRes.ok || !rmRes.ok || !sdRes.ok || !pmRes.ok) {
@@ -996,7 +997,7 @@ function App() {
   useEffect(() => {
     if (!selectedDate) return;
     setSessionLoading(true);
-    fetch(`/api/stats/session?date=${encodeURIComponent(selectedDate)}`)
+    fetch(sessionUrl(selectedDate))
       .then((response) => (response.ok ? response.json() as Promise<SessionCourtEntry[]> : Promise.reject()))
       .then((data) => setSessionData(data))
       .catch(() => setSessionData([]))
@@ -1289,11 +1290,11 @@ function App() {
             </ul>
           </section>
 
-          <footer className="panel admin-entry">
-            <a className="admin-link" href="/.auth/login/aad?post_login_redirect_uri=/admin">
-              Admin login
-            </a>
-          </footer>
+          {import.meta.env.DEV && (
+            <footer className="panel admin-entry">
+              <a className="admin-link" href="/admin">Admin</a>
+            </footer>
+          )}
         </>
       )}
 
