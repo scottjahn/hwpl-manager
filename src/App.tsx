@@ -85,11 +85,41 @@ const decodePathSegment = (value: string) => {
   }
 };
 
-const getPlayerRoute = (playerId: string) => `/player/${encodeURIComponent(playerId)}`;
-const getTeamRoute = (teamId: string) => `/team/${encodeURIComponent(teamId)}`;
+// ── Slug helpers ─────────────────────────────────────────────────────────────
+// Convert display names to URL-safe slugs. Diacritics are stripped, non-
+// alphanumeric runs become a single hyphen. Collisions get a -2, -3 suffix.
+
+const slugify = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "")
+   .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+function buildSlugMap(nameById: Map<string, string>): [Map<string, string>, Map<string, string>] {
+  const slugById = new Map<string, string>();
+  const bySlug   = new Map<string, string>();
+  for (const [id, name] of nameById) {
+    const base = slugify(name);
+    let slug = base; let n = 2;
+    while (bySlug.has(slug)) slug = `${base}-${n++}`;
+    bySlug.set(slug, id);
+    slugById.set(id, slug);
+  }
+  return [slugById, bySlug];
+}
+
+// Module-level maps refreshed synchronously each render from loaded data.
+// Placing them here keeps TeamLink / PlayerLink as simple module-level components.
+let gPlayerSlugById = new Map<string, string>();
+let gPlayerBySlug   = new Map<string, string>();
+let gTeamSlugById   = new Map<string, string>();
+let gTeamBySlug     = new Map<string, string>();
+
+const getPlayerRoute = (id: string) =>
+  `/player/${gPlayerSlugById.get(id) ?? encodeURIComponent(id)}`;
+const getTeamRoute = (id: string | null) =>
+  id ? `/team/${gTeamSlugById.get(id) ?? encodeURIComponent(id)}` : null;
 
 const TeamLink = ({ id, name }: { id: string | null; name: string }) => (
-  id ? <a className="entity-link" href={getTeamRoute(id)}>{name}</a> : <span>{name}</span>
+  id ? <a className="entity-link" href={getTeamRoute(id)!}>{name}</a> : <span>{name}</span>
 );
 
 const PlayerLink = ({ id, name }: { id: string; name: string }) => (
@@ -1032,11 +1062,24 @@ function App() {
     [teamStats]
   );
 
+  // Refresh slug maps from the current data on every render. Both inputs are
+  // Maps derived via useMemo so this is a pure derivation, not a side-effect.
+  if (playerNameById.size > 0) {
+    [gPlayerSlugById, gPlayerBySlug] = buildSlugMap(playerNameById);
+  }
+  if (teamNameById.size > 0) {
+    [gTeamSlugById, gTeamBySlug] = buildSlugMap(teamNameById);
+  }
+
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const teamPathMatch = path.match(/^\/team\/([^/]+)$/i);
   const playerPathMatch = path.match(/^\/player\/([^/]+)$/i);
-  const teamRouteId = teamPathMatch ? decodePathSegment(teamPathMatch[1]) : "";
-  const playerRouteId = playerPathMatch ? decodePathSegment(playerPathMatch[1]) : "";
+  const teamRouteSlug = teamPathMatch ? decodePathSegment(teamPathMatch[1]) : "";
+  const playerRouteSlug = playerPathMatch ? decodePathSegment(playerPathMatch[1]) : "";
+  // Resolve slug → ID (falls back to treating the segment as a raw ID for
+  // any bookmarks that pre-date this change).
+  const teamRouteId = teamRouteSlug ? (gTeamBySlug.get(teamRouteSlug) ?? "") : "";
+  const playerRouteId = playerRouteSlug ? (gPlayerBySlug.get(playerRouteSlug) ?? "") : "";
   const showLoadingOverlay = loading || sessionLoading;
 
   return (
