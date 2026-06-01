@@ -200,6 +200,7 @@ interface RoundRobinRow {
 interface SavedCourtAssignments {
   teamToCourtId: Record<string, string>;
   gamesPerCourt: Record<string, number>;
+  adminView?: AdminView;
 }
 
 const clampGamesPerMatch = (value: number) => Math.min(MAX_GAMES_PER_MATCH, Math.max(MIN_GAMES_PER_MATCH, value));
@@ -437,6 +438,9 @@ function AdminPage() {
         });
         setGamesPerCourt(normalized);
       }
+      if (parsed.adminView === "assign-courts" || parsed.adminView === "league-data") {
+        setAdminView(parsed.adminView);
+      }
     } catch {
       // Keep defaults if local storage is unavailable or malformed.
     }
@@ -467,12 +471,12 @@ function AdminPage() {
 
   useEffect(() => {
     try {
-      const payload: SavedCourtAssignments = { teamToCourtId, gamesPerCourt };
+      const payload: SavedCourtAssignments = { teamToCourtId, gamesPerCourt, adminView };
       window.localStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(payload));
     } catch {
       // Saving assignments is best-effort.
     }
-  }, [gamesPerCourt, teamToCourtId]);
+  }, [adminView, gamesPerCourt, teamToCourtId]);
 
   // Match form lists: active items plus any currently-referenced inactive item so the select always renders its value.
   const matchFormLeagues = useMemo(() => {
