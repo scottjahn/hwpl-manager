@@ -447,6 +447,11 @@ function AdminPage() {
   }, []);
 
   useEffect(() => {
+    // Don't prune while data is still loading — an empty list here means "not
+    // fetched yet", not "no active teams/courts", and pruning against empty
+    // sets would wipe every assignment restored from localStorage.
+    if (activeCourts.length === 0 || activeTeams.length === 0) return;
+
     const activeTeamIds = new Set(activeTeams.map((team) => team.id));
     const activeCourtIds = new Set(activeCourts.map((court) => court.id));
 
