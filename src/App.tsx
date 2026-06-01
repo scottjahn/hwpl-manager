@@ -1231,10 +1231,9 @@ function App() {
                 ) : (
                   sessionData.map((court) => (
                     <div key={court.courtId} style={{ marginBottom: "1.5rem" }}>
-                      <h4 style={{ marginBottom: "0.5rem" }}>{court.courtName}</h4>
                       {court.doubles.length > 0 && (
                         <div style={{ marginBottom: "0.75rem" }}>
-                          <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Doubles - Team Stats</p>
+                          <h4 style={{ marginBottom: "0.5rem" }}>{court.courtName} — Doubles</h4>
                           <div className="table-wrap">
                             <table>
                               <thead>
@@ -1269,7 +1268,7 @@ function App() {
                       )}
                       {court.ladder.length > 0 && (
                         <div>
-                          <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Ladder - Player Stats</p>
+                          <h4 style={{ marginBottom: "0.5rem" }}>{court.courtName} — Ladder</h4>
                           <div className="table-wrap">
                             <table>
                               <thead>
