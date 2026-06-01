@@ -357,13 +357,13 @@ const TeamDetailView = ({
                 <thead>
                   <tr>
                     <th>Scope</th>
-                    <th>GP</th>
-                    <th>W</th>
-                    <th>L</th>
-                    <th>Win %</th>
-                    <th>PF</th>
-                    <th>PA</th>
-                    <th>Diff</th>
+                    <th title="Games Played">GP</th>
+                    <th title="Wins">W</th>
+                    <th title="Losses">L</th>
+                    <th title="Win Percentage">Win %</th>
+                    <th title="Points For">PF</th>
+                    <th title="Points Against">PA</th>
+                    <th title="Point Differential (Points For minus Points Against)">Diff</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -407,13 +407,13 @@ const TeamDetailView = ({
               <thead>
                 <tr>
                   <th>Player</th>
-                  <th>GP</th>
-                  <th>W</th>
-                  <th>L</th>
-                  <th>Win %</th>
-                  <th>PF</th>
-                  <th>PA</th>
-                  <th>Diff</th>
+                  <th title="Games Played">GP</th>
+                  <th title="Wins">W</th>
+                  <th title="Losses">L</th>
+                  <th title="Win Percentage">Win %</th>
+                  <th title="Points For">PF</th>
+                  <th title="Points Against">PA</th>
+                  <th title="Point Differential (Points For minus Points Against)">Diff</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,13 +445,13 @@ const TeamDetailView = ({
                 <tr>
                   <th>League</th>
                   <th>Opponent</th>
-                  <th>GP</th>
-                  <th>W</th>
-                  <th>L</th>
-                  <th>Win %</th>
-                  <th>PF</th>
-                  <th>PA</th>
-                  <th>Diff</th>
+                  <th title="Games Played">GP</th>
+                  <th title="Wins">W</th>
+                  <th title="Losses">L</th>
+                  <th title="Win Percentage">Win %</th>
+                  <th title="Points For">PF</th>
+                  <th title="Points Against">PA</th>
+                  <th title="Point Differential (Points For minus Points Against)">Diff</th>
                 </tr>
               </thead>
               <tbody>
@@ -770,13 +770,13 @@ const PlayerDetailView = ({
                 <thead>
                   <tr>
                     <th>Scope</th>
-                    <th>GP</th>
-                    <th>W</th>
-                    <th>L</th>
-                    <th>Win %</th>
-                    <th>PF</th>
-                    <th>PA</th>
-                    <th>Diff</th>
+                    <th title="Games Played">GP</th>
+                    <th title="Wins">W</th>
+                    <th title="Losses">L</th>
+                    <th title="Win Percentage">Win %</th>
+                    <th title="Points For">PF</th>
+                    <th title="Points Against">PA</th>
+                    <th title="Point Differential (Points For minus Points Against)">Diff</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -814,13 +814,13 @@ const PlayerDetailView = ({
                     <thead>
                       <tr>
                         <th>Court</th>
-                        <th>GP</th>
-                        <th>W</th>
-                        <th>L</th>
-                        <th>Win %</th>
-                        <th>PF</th>
-                        <th>PA</th>
-                        <th>Diff</th>
+                        <th title="Games Played">GP</th>
+                        <th title="Wins">W</th>
+                        <th title="Losses">L</th>
+                        <th title="Win Percentage">Win %</th>
+                        <th title="Points For">PF</th>
+                        <th title="Points Against">PA</th>
+                        <th title="Point Differential (Points For minus Points Against)">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -856,13 +856,13 @@ const PlayerDetailView = ({
               <tr>
                 <th>League</th>
                 <th>Opponent</th>
-                <th>GP</th>
-                <th>W</th>
-                <th>L</th>
-                <th>Win %</th>
-                <th>PF</th>
-                <th>PA</th>
-                <th>Diff</th>
+                <th title="Games Played">GP</th>
+                <th title="Wins">W</th>
+                <th title="Losses">L</th>
+                <th title="Win Percentage">Win %</th>
+                <th title="Points For">PF</th>
+                <th title="Points Against">PA</th>
+                <th title="Point Differential (Points For minus Points Against)">Diff</th>
               </tr>
             </thead>
             <tbody>
@@ -1139,13 +1139,13 @@ function App() {
                   <thead>
                     <tr>
                       <th>Team</th>
-                      <th>GP</th>
-                      <th>W</th>
-                      <th>L</th>
-                      <th>Win %</th>
-                      <th>PF</th>
-                      <th>PA</th>
-                      <th>Diff</th>
+                      <th title="Games Played">GP</th>
+                      <th title="Wins">W</th>
+                      <th title="Losses">L</th>
+                      <th title="Win Percentage">Win %</th>
+                      <th title="Points For">PF</th>
+                      <th title="Points Against">PA</th>
+                      <th title="Point Differential (Points For minus Points Against)">Diff</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1176,13 +1176,13 @@ function App() {
                   <thead>
                     <tr>
                       <th>Player</th>
-                      <th>GP</th>
-                      <th>W</th>
-                      <th>L</th>
-                      <th>Win %</th>
-                      <th>PF</th>
-                      <th>PA</th>
-                      <th>Diff</th>
+                      <th title="Games Played">GP</th>
+                      <th title="Wins">W</th>
+                      <th title="Losses">L</th>
+                      <th title="Win Percentage">Win %</th>
+                      <th title="Points For">PF</th>
+                      <th title="Points Against">PA</th>
+                      <th title="Point Differential (Points For minus Points Against)">Diff</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1239,13 +1239,13 @@ function App() {
                               <thead>
                                 <tr>
                                   <th>Team</th>
-                                  <th>GP</th>
-                                  <th>W</th>
-                                  <th>L</th>
-                                  <th>Win %</th>
-                                  <th>PF</th>
-                                  <th>PA</th>
-                                  <th>Diff</th>
+                                  <th title="Games Played">GP</th>
+                                  <th title="Wins">W</th>
+                                  <th title="Losses">L</th>
+                                  <th title="Win Percentage">Win %</th>
+                                  <th title="Points For">PF</th>
+                                  <th title="Points Against">PA</th>
+                                  <th title="Point Differential (Points For minus Points Against)">Diff</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1274,13 +1274,13 @@ function App() {
                               <thead>
                                 <tr>
                                   <th>Player</th>
-                                  <th>GP</th>
-                                  <th>W</th>
-                                  <th>L</th>
-                                  <th>Win %</th>
-                                  <th>PF</th>
-                                  <th>PA</th>
-                                  <th>Diff</th>
+                                  <th title="Games Played">GP</th>
+                                  <th title="Wins">W</th>
+                                  <th title="Losses">L</th>
+                                  <th title="Win Percentage">Win %</th>
+                                  <th title="Points For">PF</th>
+                                  <th title="Points Against">PA</th>
+                                  <th title="Point Differential (Points For minus Points Against)">Diff</th>
                                 </tr>
                               </thead>
                               <tbody>
