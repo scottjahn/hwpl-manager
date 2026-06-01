@@ -373,6 +373,12 @@ function AdminPage() {
   const [gamesPerCourt, setGamesPerCourt] = useState<Record<string, number>>({});
   const [draggedTeamId, setDraggedTeamId] = useState<string | null>(null);
 
+  // Guards the save effect from firing during the initial mount renders (before
+  // data has loaded and localStorage has been restored). Set to true in the
+  // cleanup effect the first time it runs with real data, which is always BEFORE
+  // the save effect runs in that same render cycle.
+  const readyToSaveRef = useRef(false);
+
   const showWidgetMessage = useCallback((scope: WidgetScope, text: string, isError = false) => {
     setWidgetMessage({ scope, text, isError });
   }, []);
@@ -452,6 +458,10 @@ function AdminPage() {
     // sets would wipe every assignment restored from localStorage.
     if (activeCourts.length === 0 || activeTeams.length === 0) return;
 
+    // Data is now loaded. Allow the save effect to write to localStorage from
+    // this point on. This runs before the save effect in the same render cycle.
+    readyToSaveRef.current = true;
+
     const activeTeamIds = new Set(activeTeams.map((team) => team.id));
     const activeCourtIds = new Set(activeCourts.map((court) => court.id));
 
@@ -475,6 +485,9 @@ function AdminPage() {
   }, [activeCourts, activeTeams]);
 
   useEffect(() => {
+    // Skip until data is loaded and restored — prevents the initial mount render
+    // (with empty state) from overwriting previously saved assignments.
+    if (!readyToSaveRef.current) return;
     try {
       const payload: SavedCourtAssignments = { teamToCourtId, gamesPerCourt, adminView };
       window.localStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(payload));
