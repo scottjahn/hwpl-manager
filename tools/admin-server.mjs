@@ -213,7 +213,7 @@ app.post('/api/ops/players', (req, res) => {
     getDb().prepare(
       `INSERT INTO players (id, first_name, last_name, dupr_id, default_team_id, is_active)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(id, firstName, lastName, duprId, defaultTeamId ?? null, isActive !== false ? 1 : 0);
+    ).run(id, firstName, lastName, duprId, defaultTeamId || null, isActive !== false ? 1 : 0);
     send(res, { id }, 201);
   } catch (e) { fail(res, String(e), 500); }
 });
@@ -223,7 +223,7 @@ app.put('/api/ops/players/:id', (req, res) => {
     const { firstName, lastName, duprId, defaultTeamId, isActive } = req.body ?? {};
     const r = getDb().prepare(
       `UPDATE players SET first_name=?, last_name=?, dupr_id=?, default_team_id=?, is_active=? WHERE id=?`
-    ).run(firstName, lastName, duprId, defaultTeamId ?? null, isActive !== false ? 1 : 0, req.params.id);
+    ).run(firstName, lastName, duprId, defaultTeamId || null, isActive !== false ? 1 : 0, req.params.id);
     if (r.changes === 0) return fail(res, 'Player not found.', 404);
     send(res, { updated: true });
   } catch (e) { fail(res, String(e), 500); }
