@@ -135,7 +135,7 @@ function loadLookups(d = getDb()) {
     leagueById: mapBy('SELECT id, name, start_date FROM leagues'),
     courtById: mapBy('SELECT id, name FROM courts'),
     teamById: mapBy('SELECT id, name FROM teams'),
-    playerById: mapBy('SELECT id, first_name, last_name FROM players'),
+    playerById: mapBy('SELECT id, first_name, last_name, dupr_id FROM players'),
     teamLeagues: rows('SELECT team_id, league_id FROM team_leagues'),
     partsByMatch: (() => {
       const m = new Map();
