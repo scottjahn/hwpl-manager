@@ -531,6 +531,7 @@ const TeamDetailView = ({
                 <th>Court</th>
                 <th>Team Played</th>
                 <th>Score</th>
+                <th>Result</th>
                 <th>Players (All 4)</th>
               </tr>
             </thead>
@@ -539,9 +540,11 @@ const TeamDetailView = ({
                 const opponentId = match.teamAId === teamId ? match.teamBId : match.teamAId;
                 const opponentName = match.teamAId === teamId ? match.teamBName : match.teamAName;
                 const players = getAllMatchPlayerNames(match);
-                const scoreText = match.teamAId === teamId
+                const onSideA = match.teamAId === teamId;
+                const scoreText = onSideA
                   ? `${match.scoreA}-${match.scoreB}`
                   : `${match.scoreB}-${match.scoreA}`;
+                const isWin = onSideA ? match.scoreA > match.scoreB : match.scoreB > match.scoreA;
 
                 return (
                   <tr key={match.id}>
@@ -550,6 +553,7 @@ const TeamDetailView = ({
                     <td>{match.courtName}</td>
                     <td><TeamLink id={opponentId} name={opponentName} /></td>
                     <td>{scoreText}</td>
+                    <td style={{ color: isWin ? "#2a7a3b" : "#9a2f2f", fontWeight: 600 }}>{isWin ? "Win" : "Loss"}</td>
                     <td>{players.join(", ")}</td>
                   </tr>
                 );
@@ -942,6 +946,7 @@ const PlayerDetailView = ({
                 <th>Team</th>
                 <th>vs Team</th>
                 <th>Score</th>
+                <th>Result</th>
                 <th>Players</th>
               </tr>
             </thead>
@@ -951,6 +956,7 @@ const PlayerDetailView = ({
                 const teamMeta = getPlayerTeamKeyAndLabel(match, playerId);
                 const opponentTeam = getOpponentTeamForPlayer(match, playerId);
                 const scoreText = side === "A" ? `${match.scoreA}-${match.scoreB}` : `${match.scoreB}-${match.scoreA}`;
+                const isWin = side === "A" ? match.scoreA > match.scoreB : match.scoreB > match.scoreA;
                 const playerNames = match.participants.map((participant) => participant.playerName).join(", ");
 
                 return (
@@ -961,6 +967,7 @@ const PlayerDetailView = ({
                     <td>{teamMeta.key === "ladder" ? teamMeta.label : <TeamLink id={teamMeta.key} name={teamMeta.label} />}</td>
                     <td>{opponentTeam.id ? <TeamLink id={opponentTeam.id} name={opponentTeam.name} /> : opponentTeam.name}</td>
                     <td>{scoreText}</td>
+                    <td style={{ color: isWin ? "#2a7a3b" : "#9a2f2f", fontWeight: 600 }}>{isWin ? "Win" : "Loss"}</td>
                     <td>{playerNames}</td>
                   </tr>
                 );
