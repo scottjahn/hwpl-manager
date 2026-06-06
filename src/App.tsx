@@ -987,6 +987,8 @@ function App() {
   const [sessionData, setSessionData] = useState<SessionCourtEntry[]>([]);
   const [sessionLoading, setSessionLoading] = useState(false);
 
+  const [teamCourtFilter, setTeamCourtFilter] = useState<string>("");
+
   const loadStats = useCallback(async () => {
     const [psRes, tsRes, rmRes, sdRes, pmRes] = await Promise.all([
       fetch(statsUrl("players")),
@@ -1056,6 +1058,47 @@ function App() {
     }
     return map;
   }, [playerStats, publicMatches]);
+
+  // Courts that appear in at least one match, sorted alphabetically.
+  const courtOptions = useMemo(() => {
+    const courts = new Map<string, string>(); // id → name
+    for (const m of publicMatches) {
+      if (m.courtId && m.courtName) courts.set(m.courtId, m.courtName);
+    }
+    return [...courts.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [publicMatches]);
+
+  // Team stats re-computed from publicMatches when a court filter is active.
+  const filteredTeamStats = useMemo(() => {
+    if (!teamCourtFilter) return teamStats;
+    const accs = new Map<string, { gp: number; wins: number; pf: number; pa: number }>();
+    for (const m of publicMatches) {
+      if (m.gameType !== "Doubles" || !m.teamAId || !m.teamBId) continue;
+      if (m.courtId !== teamCourtFilter) continue;
+      const add = (id: string, pf: number, pa: number) => {
+        const a = accs.get(id) ?? { gp: 0, wins: 0, pf: 0, pa: 0 };
+        a.gp += 1; if (pf > pa) a.wins += 1; a.pf += pf; a.pa += pa;
+        accs.set(id, a);
+      };
+      add(m.teamAId, m.scoreA, m.scoreB);
+      add(m.teamBId, m.scoreB, m.scoreA);
+    }
+    return [...accs.entries()]
+      .map(([id, a]) => ({
+        id,
+        name: teamNameById.get(id) ?? "Unknown Team",
+        gamesPlayed: a.gp,
+        wins: a.wins,
+        losses: a.gp - a.wins,
+        pointsFor: a.pf,
+        pointsAgainst: a.pa,
+        differential: a.pf - a.pa,
+        winRate: a.gp === 0 ? 0 : a.wins / a.gp,
+      }))
+      .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.differential - a.differential);
+  }, [teamCourtFilter, publicMatches, teamStats, teamNameById]);
 
   const teamIdByName = useMemo(
     () => new Map<string, string>(teamStats.map((team) => [team.name, team.id])),
@@ -1134,6 +1177,17 @@ function App() {
                 <h3>Team Stats</h3>
                 <p>Team totals include all matches where players represented that team.</p>
               </div>
+              <div className="filter-row">
+                <label>
+                  Court
+                  <select value={teamCourtFilter} onChange={(e) => setTeamCourtFilter(e.target.value)}>
+                    <option value="">No Filter</option>
+                    {courtOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -1149,7 +1203,7 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {teamStats.map((row) => (
+                    {filteredTeamStats.map((row) => (
                       <tr key={row.id}>
                         <td><TeamLink id={row.id} name={row.name} /></td>
                         <td>{row.gamesPlayed}</td>
