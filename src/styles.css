@@ -164,7 +164,7 @@ th {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--logo-highlight);
-  background: linear-gradient(140deg, #102030, var(--logo-primary) 68%, #1a355f);
+  background: #102040;
   border-bottom: 1px solid rgba(255, 255, 255, 0.25);
 }
 
