@@ -1423,9 +1423,6 @@ function AdminPage() {
         scoreA: "",
         scoreB: ""
       });
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }, 50);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const networkMessage = `Network error: ${msg}`;
@@ -1438,7 +1435,6 @@ function AdminPage() {
         };
       });
       setMatchError(networkMessage);
-      setTimeout(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, 50);
       setIsSavingMatch(false);
       return;
     }
