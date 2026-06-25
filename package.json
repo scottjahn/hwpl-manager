@@ -11,13 +11,15 @@
     "export": "node tools/export.mjs",
     "import": "node tools/import-from-azure.mjs",
     "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
-    "preview": "vite preview"
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.42.2",
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.0.4",
@@ -25,6 +27,7 @@
     "concurrently": "^9.1.2",
     "express": "^4.21.2",
     "typescript": "^5.6.3",
-    "vite": "^8.0.11"
+    "vite": "^8.0.11",
+    "wrangler": "^4.104.0"
   }
 }
