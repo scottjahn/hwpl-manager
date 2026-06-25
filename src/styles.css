@@ -168,6 +168,23 @@ th {
   border-bottom: 1px solid rgba(255, 255, 255, 0.25);
 }
 
+.match-filter-row th {
+  padding: 0.3rem 0.36rem 0.18rem;
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: none;
+}
+
+.match-filter-row select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--logo-highlight);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.25rem;
+}
+
 .match-form {
   display: grid;
   gap: 0.8rem;
@@ -234,6 +251,23 @@ button:hover {
   font-size: 0.82rem;
   color: #9a2f2f;
   font-weight: 600;
+}
+
+.match-log-header {
+  display: grid;
+  grid-template-columns: 90px 1fr 42px 42px 1fr;
+  gap: 0.6rem;
+  padding: 0.3rem 0.4rem 0.2rem;
+  background: #102040;
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+}
+
+.match-log-header span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--logo-highlight);
 }
 
 .match-log ul {
@@ -486,6 +520,14 @@ button:hover {
 .admin-entry {
   padding: 0.7rem 1rem;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.admin-entry-sep {
+  color: var(--ink-soft);
+  user-select: none;
 }
 
 .admin-link {

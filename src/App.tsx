@@ -314,15 +314,25 @@ const TeamDetailView = ({
 
   const dateOptions = useMemo(() => Array.from(new Set(teamMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [teamMatches]);
 
+  const courtOptions = useMemo(() => {
+    const courts = new Map<string, string>();
+    for (const match of teamMatches) {
+      if (match.courtId) courts.set(match.courtId, match.courtName);
+    }
+    return Array.from(courts.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [teamMatches]);
+
   const [leagueFilter, setLeagueFilter] = useState("");
   const [opponentFilter, setOpponentFilter] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [courtFilter, setCourtFilter] = useState("");
 
   const filteredMatches = useMemo(
     () => teamMatches.filter((match) => {
       if (leagueFilter && match.leagueId !== leagueFilter) return false;
       if (dateFilter && match.date !== dateFilter) return false;
+      if (courtFilter && match.courtId !== courtFilter) return false;
 
       const opponentId = match.teamAId === teamId ? match.teamBId : match.teamAId;
       if (opponentFilter && opponentId !== opponentFilter) return false;
@@ -330,7 +340,7 @@ const TeamDetailView = ({
       if (playerFilter && !match.participants.some((participant) => participant.playerId === playerFilter)) return false;
       return true;
     }),
-    [dateFilter, leagueFilter, opponentFilter, playerFilter, teamId, teamMatches]
+    [courtFilter, dateFilter, leagueFilter, opponentFilter, playerFilter, teamId, teamMatches]
   );
 
   return (
@@ -477,49 +487,6 @@ const TeamDetailView = ({
       <section className="panel">
         <div className="panel-header">
           <h3>Match List</h3>
-          <p>Filter by league, opponent team, player, or date.</p>
-        </div>
-
-        <div className="filter-row">
-          <label>
-            League
-            <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
-              <option value="">All leagues</option>
-              {leagueOptions.map((league) => (
-                <option key={league.id} value={league.id}>{league.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Team Played
-            <select value={opponentFilter} onChange={(event) => setOpponentFilter(event.target.value)}>
-              <option value="">All teams</option>
-              {opponentOptions.map((team) => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Player
-            <select value={playerFilter} onChange={(event) => setPlayerFilter(event.target.value)}>
-              <option value="">All players</option>
-              {playerOptions.map((player) => (
-                <option key={player.id} value={player.id}>{player.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Date
-            <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
-              <option value="">All dates</option>
-              {dateOptions.map((date) => (
-                <option key={date} value={date}>{date}</option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <div className="table-wrap">
@@ -533,6 +500,50 @@ const TeamDetailView = ({
                 <th>Score</th>
                 <th>Result</th>
                 <th>Players (All 4)</th>
+              </tr>
+              <tr className="match-filter-row">
+                <th>
+                  <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+                    <option value="">All dates</option>
+                    {dateOptions.map((date) => (
+                      <option key={date} value={date}>{date}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
+                    <option value="">All leagues</option>
+                    {leagueOptions.map((league) => (
+                      <option key={league.id} value={league.id}>{league.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={courtFilter} onChange={(event) => setCourtFilter(event.target.value)}>
+                    <option value="">No Filter</option>
+                    {courtOptions.map((court) => (
+                      <option key={court.id} value={court.id}>{court.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={opponentFilter} onChange={(event) => setOpponentFilter(event.target.value)}>
+                    <option value="">All teams</option>
+                    {opponentOptions.map((team) => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th />
+                <th />
+                <th>
+                  <select value={playerFilter} onChange={(event) => setPlayerFilter(event.target.value)}>
+                    <option value="">All players</option>
+                    {playerOptions.map((player) => (
+                      <option key={player.id} value={player.id}>{player.name}</option>
+                    ))}
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -731,15 +742,25 @@ const PlayerDetailView = ({
 
   const dateOptions = useMemo(() => Array.from(new Set(playerMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [playerMatches]);
 
+  const courtOptions = useMemo(() => {
+    const courts = new Map<string, string>();
+    for (const match of playerMatches) {
+      if (match.courtId) courts.set(match.courtId, match.courtName);
+    }
+    return Array.from(courts.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [playerMatches]);
+
   const [leagueFilter, setLeagueFilter] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [courtFilter, setCourtFilter] = useState("");
 
   const filteredMatches = useMemo(
     () => playerMatches.filter((match) => {
       if (leagueFilter && match.leagueId !== leagueFilter) return false;
       if (dateFilter && match.date !== dateFilter) return false;
+      if (courtFilter && match.courtId !== courtFilter) return false;
 
       const teamMeta = getPlayerTeamKeyAndLabel(match, playerId);
       if (teamFilter && teamMeta.key !== teamFilter) return false;
@@ -747,7 +768,7 @@ const PlayerDetailView = ({
       if (playerFilter && !match.participants.some((participant) => participant.playerId === playerFilter)) return false;
       return true;
     }),
-    [dateFilter, leagueFilter, playerFilter, playerId, playerMatches, teamFilter]
+    [courtFilter, dateFilter, leagueFilter, playerFilter, playerId, playerMatches, teamFilter]
   );
 
   return (
@@ -891,49 +912,6 @@ const PlayerDetailView = ({
       <section className="panel">
         <div className="panel-header">
           <h3>Match List</h3>
-          <p>Filter by league, team, player, or date.</p>
-        </div>
-
-        <div className="filter-row">
-          <label>
-            League
-            <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
-              <option value="">All leagues</option>
-              {leagueOptions.map((league) => (
-                <option key={league.id} value={league.id}>{league.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Team
-            <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
-              <option value="">All teams</option>
-              {teamOptions.map((team) => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Player
-            <select value={playerFilter} onChange={(event) => setPlayerFilter(event.target.value)}>
-              <option value="">All players</option>
-              {relatedPlayerOptions.map((player) => (
-                <option key={player.id} value={player.id}>{player.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Date
-            <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
-              <option value="">All dates</option>
-              {dateOptions.map((date) => (
-                <option key={date} value={date}>{date}</option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <div className="table-wrap">
@@ -948,6 +926,51 @@ const PlayerDetailView = ({
                 <th>Score</th>
                 <th>Result</th>
                 <th>Players</th>
+              </tr>
+              <tr className="match-filter-row">
+                <th>
+                  <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+                    <option value="">All dates</option>
+                    {dateOptions.map((date) => (
+                      <option key={date} value={date}>{date}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
+                    <option value="">All leagues</option>
+                    {leagueOptions.map((league) => (
+                      <option key={league.id} value={league.id}>{league.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={courtFilter} onChange={(event) => setCourtFilter(event.target.value)}>
+                    <option value="">No Filter</option>
+                    {courtOptions.map((court) => (
+                      <option key={court.id} value={court.id}>{court.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th>
+                  <select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)}>
+                    <option value="">All teams</option>
+                    {teamOptions.map((team) => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </th>
+                <th />
+                <th />
+                <th />
+                <th>
+                  <select value={playerFilter} onChange={(event) => setPlayerFilter(event.target.value)}>
+                    <option value="">All players</option>
+                    {relatedPlayerOptions.map((player) => (
+                      <option key={player.id} value={player.id}>{player.name}</option>
+                    ))}
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1182,7 +1205,6 @@ function App() {
             <article className="panel">
               <div className="panel-header">
                 <h3>Team Stats</h3>
-                <p>Team totals include all matches where players represented that team.</p>
               </div>
               <div className="filter-row">
                 <label>
@@ -1230,7 +1252,6 @@ function App() {
             <article className="panel">
               <div className="panel-header">
                 <h3>Player Stats</h3>
-                <p>Includes games from default and non-default teams.</p>
               </div>
               <div className="table-wrap">
                 <table>
@@ -1268,7 +1289,6 @@ function App() {
           <section className="panel">
             <div className="panel-header">
               <h3>Session Summary</h3>
-              <p>Match results by court for a selected play date.</p>
             </div>
             {sessionDates.length > 0 ? (
               <>
@@ -1376,6 +1396,12 @@ function App() {
               <h3>Recent Matches</h3>
               <p>Latest 10 match entries.</p>
             </div>
+            <div className="match-log-header">
+              <span>Date</span>
+              <span>Team</span>
+              <span style={{ gridColumn: "3 / 5", textAlign: "center" }}>Score</span>
+              <span>Team</span>
+            </div>
             <ul>
               {recentMatches.map((match) => (
                 <li key={match.id}>
@@ -1393,11 +1419,17 @@ function App() {
             </ul>
           </section>
 
-          {import.meta.env.DEV && (
-            <footer className="panel admin-entry">
-              <a className="admin-link" href="/admin">Admin</a>
-            </footer>
-          )}
+          <footer className="panel admin-entry">
+            {import.meta.env.DEV && (
+              <>
+                <a className="admin-link" href="/admin">Admin</a>
+                <span className="admin-entry-sep" aria-hidden="true">·</span>
+              </>
+            )}
+            <a className="admin-link" href="mailto:scott.jahn@gmail.com">Contact</a>
+            <span className="admin-entry-sep" aria-hidden="true">·</span>
+            <a className="admin-link" href="https://github.com/scottjahn/hwpl-manager/issues">Feedback</a>
+          </footer>
         </>
       )}
 
