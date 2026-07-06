@@ -1845,6 +1845,14 @@ function AdminPage() {
               Export CSV
             </button>
           </div>
+          <div className="panel-header" style={{ marginTop: "1.2rem" }}>
+            <h3>Publish to Cloudflare</h3>
+            <p>Run in the project directory to export stats and deploy the public site.</p>
+          </div>
+          <pre className="publish-steps">{`npm run export
+git add public/data/
+git commit -m "Stats update $(date +%Y-%m-%d)"
+git push`}</pre>
         </article>
 
         <article className="panel module-manage-matches">
