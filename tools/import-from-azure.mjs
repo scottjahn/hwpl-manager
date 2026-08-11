@@ -28,7 +28,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDb, newId } from './db.mjs';
+import { getDb, newId, defaultLocationId } from './db.mjs';
 
 // Parse --dir <path> from argv, falling back to env var then default.
 const dirFlagIdx = process.argv.indexOf('--dir');
@@ -193,19 +193,22 @@ const doImport = d.transaction(() => {
   }
   console.log(`  players: ${players.length}`);
 
-  // Matches
+  // Matches. The Azure schema predates locations, so imported matches land at
+  // the default venue unless the export happens to carry a location_id.
   const matches = read('matches');
+  const fallbackLocationId = defaultLocationId(d);
   const iMatch = d.prepare(
     `INSERT OR IGNORE INTO matches
-       (id, league_id, match_date, court_id, scoring_type, game_type,
+       (id, league_id, match_date, court_id, location_id, scoring_type, game_type,
         team_a_id, team_b_id, score_a, score_b)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
   );
   for (const r of matches) {
     const tA = r.team_a_id ?? r.teamAId; const tB = r.team_b_id ?? r.teamBId;
     iMatch.run(
       asId(r.id), asId(r.league_id ?? r.leagueId), asDate(r.match_date ?? r.matchDate),
       asId(r.court_id ?? r.courtId) || null,
+      asId(r.location_id ?? r.locationId) || fallbackLocationId,
       r.scoring_type ?? r.scoringType ?? 'Sideout',
       r.game_type ?? r.gameType ?? 'Doubles',
       tA ? asId(tA) : null, tB ? asId(tB) : null,

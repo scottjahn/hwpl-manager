@@ -19,7 +19,8 @@ The public site has no live backend. All stats are pre-computed at build time an
 - Session summary — per-court match results for a selected date
 - Player and team URLs use readable slugs (`/player/alice-nguyen`, `/team/smashers`)
 - Local-only admin panel at `/admin` (only accessible during `npm run dev`)
-  - Full CRUD for players, teams, leagues, courts, and matches
+  - Full CRUD for players, teams, leagues, courts, locations, and matches
+  - Matches record a location (venue); the location flagged as default is pre-selected
   - Court assignment planner with drag-and-drop
   - DUPR CSV export by date
 
@@ -98,6 +99,10 @@ npm run export
 ## Database
 
 The SQLite database lives at `data/hwpl.db` (gitignored). Schema is in `database/schema.sqlite.sql`.
+
+`tools/db.mjs` applies the schema on every open, plus a small idempotent migration step: it adds
+`matches.location_id` to older databases, seeds the club's home venue (WFCU Centre Sports Gym) when
+the `locations` table is empty, and assigns the default location to any match that has none.
 
 To back up: copy `data/hwpl.db` somewhere safe. The NAS is a good home for the canonical copy.
 

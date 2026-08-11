@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS courts (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Venues. Courts (East/West/Middle) live inside a location; each match records
+-- where it was played. Exactly one row may carry is_default = 1 — the match form
+-- pre-selects it, and tools/db.mjs seeds the club's home venue on first run.
+CREATE TABLE IF NOT EXISTS locations (
+  id         TEXT    PRIMARY KEY,
+  name       TEXT    NOT NULL,
+  address    TEXT    NOT NULL DEFAULT '',
+  is_default INTEGER NOT NULL DEFAULT 0,  -- 0/1
+  is_active  INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Teams can belong to more than one league.
 CREATE TABLE IF NOT EXISTS team_leagues (
   team_id   TEXT NOT NULL REFERENCES teams(id),
@@ -51,6 +63,7 @@ CREATE TABLE IF NOT EXISTS matches (
   league_id    TEXT    NOT NULL REFERENCES leagues(id),
   match_date   TEXT    NOT NULL,          -- ISO date
   court_id     TEXT    REFERENCES courts(id),
+  location_id  TEXT    REFERENCES locations(id),
   scoring_type TEXT    NOT NULL DEFAULT 'Sideout',
   game_type    TEXT    NOT NULL DEFAULT 'Doubles',
   team_a_id    TEXT    REFERENCES teams(id),
@@ -82,6 +95,9 @@ CREATE TABLE IF NOT EXISTS match_participants (
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_players_dupr_id   ON players(dupr_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_courts_name       ON courts(name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_locations_name    ON locations(name);
+-- Partial unique index: at most one default location.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_locations_default ON locations(is_default) WHERE is_default = 1;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_mp_unique_player  ON match_participants(match_id, player_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_mp_slot           ON match_participants(match_id, team_side, participant_order);
 CREATE INDEX IF NOT EXISTS ix_matches_league_date      ON matches(league_id, match_date);

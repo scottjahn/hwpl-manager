@@ -15,6 +15,14 @@ export interface Court {
   isActive: boolean;
 }
 
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -35,6 +43,7 @@ export interface Match {
   id: string;
   leagueId: string;
   courtId: string;
+  locationId: string;
   scoringType: "Sideout" | "Rally";
   gameType: "Doubles" | "Ladder";
   date: string;
@@ -94,6 +103,9 @@ export interface PublicMatch {
   leagueEndDate: string;
   courtId: string | null;
   courtName: string;
+  // Optional: a static snapshot exported before locations existed won't have them.
+  locationId?: string | null;
+  locationName?: string;
   scoringType: "Sideout" | "Rally";
   gameType: "Doubles" | "Ladder";
   teamAId: string | null;

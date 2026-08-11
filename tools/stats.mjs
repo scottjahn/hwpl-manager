@@ -34,6 +34,7 @@ function buildIndexes(raw) {
     playerById: new Map(raw.players.map((p) => [p.id, p])),
     teamById: new Map(raw.teams.map((t) => [t.id, t])),
     courtById: new Map(raw.courts.map((c) => [c.id, c])),
+    locationById: new Map((raw.locations ?? []).map((l) => [l.id, l])),
     leagueById: new Map(raw.leagues.map((l) => [l.id, l])),
   };
 }
@@ -117,6 +118,8 @@ export const computeMatchesFull = (raw, idx) =>
       leagueEndDate: league?.endDate ?? '',
       courtId: m.courtId,
       courtName: idx.courtById.get(m.courtId)?.name ?? 'Unassigned Court',
+      locationId: m.locationId ?? null,
+      locationName: idx.locationById.get(m.locationId)?.name ?? '',
       scoringType: m.scoringType,
       gameType: m.gameType,
       teamAId: m.teamAId,

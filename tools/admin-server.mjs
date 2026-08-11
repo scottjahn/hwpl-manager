@@ -8,7 +8,7 @@
 //          npm run dev:api     (this server alone, for debugging)
 
 import express from 'express';
-import { getDb, newId, loadRaw, DB_PATH } from './db.mjs';
+import { getDb, newId, loadRaw, defaultLocationId, DB_PATH } from './db.mjs';
 import { computeAll, computeSession, buildIndexes } from './stats.mjs';
 
 const PORT = Number(process.env.HWPL_ADMIN_PORT ?? 8787);
@@ -134,6 +134,7 @@ function loadLookups(d = getDb()) {
   return {
     leagueById: mapBy('SELECT id, name, start_date FROM leagues'),
     courtById: mapBy('SELECT id, name FROM courts'),
+    locationById: mapBy('SELECT id, name, address FROM locations'),
     teamById: mapBy('SELECT id, name FROM teams'),
     playerById: mapBy('SELECT id, first_name, last_name, dupr_id FROM players'),
     teamLeagues: rows('SELECT team_id, league_id FROM team_leagues'),
@@ -153,7 +154,7 @@ const fullName = (p) => `${p.first_name} ${p.last_name}`;
 
 // Build the admin-list match shape the AdminPage expects.
 function buildMatchListItem(m, lk) {
-  const { leagueById, courtById, teamById, playerById, partsByMatch } = lk;
+  const { leagueById, courtById, locationById, teamById, playerById, partsByMatch } = lk;
   const parts = partsByMatch.get(m.id) ?? [];
   const getPart = (side, order) => parts.find((p) => p.team_side === side && p.participant_order === order);
   const pA1 = getPart('A', 1); const pA2 = getPart('A', 2);
@@ -170,6 +171,7 @@ function buildMatchListItem(m, lk) {
     id: m.id,
     leagueId: m.league_id,
     courtId: m.court_id,
+    locationId: m.location_id ?? '',
     scoringType: m.scoring_type,
     gameType: m.game_type,
     date: m.match_date,
@@ -179,6 +181,7 @@ function buildMatchListItem(m, lk) {
     scoreB: m.score_b,
     leagueName: league ? `${league.name} (${league.start_date})` : '',
     courtName: courtById.get(m.court_id)?.name ?? '',
+    locationName: locationById.get(m.location_id)?.name ?? '',
     teamAName: m.game_type === 'Ladder'
       ? ladderSide(pA1, pA2)
       : (teamById.get(m.team_a_id)?.name ?? 'Ladder Side A'),
@@ -271,6 +274,68 @@ app.put('/api/ops/courts/:id', (req, res) => {
 app.delete('/api/ops/courts/:id', (req, res) => {
   try {
     getDb().prepare(`UPDATE courts SET is_active=0 WHERE id=?`).run(req.params.id);
+    send(res, { deactivated: true });
+  } catch (e) { fail(res, String(e), 500); }
+});
+
+// ─── Locations ───────────────────────────────────────────────────────────────
+// Venues. At most one location is the default (enforced by a partial unique
+// index); the match form pre-selects it for new matches.
+
+// Clears the flag everywhere else so `id` can become the only default.
+const clearOtherDefaults = (d, id) =>
+  d.prepare(`UPDATE locations SET is_default=0 WHERE id<>?`).run(id);
+
+app.get('/api/ops/locations', (_req, res) => {
+  try {
+    const rows = getDb().prepare(
+      `SELECT id, name, address, is_default AS isDefault, is_active AS isActive
+       FROM locations ORDER BY is_default DESC, name`
+    ).all().map((r) => ({ ...r, isDefault: bool(r.isDefault), isActive: bool(r.isActive) }));
+    send(res, rows);
+  } catch (e) { fail(res, String(e), 500); }
+});
+
+app.post('/api/ops/locations', (req, res) => {
+  try {
+    const { name, address, isDefault, isActive } = req.body ?? {};
+    if (!name) return fail(res, 'Field name is required.');
+    const d = getDb();
+    const id = newId();
+    // The very first location is the default whether or not the caller says so.
+    const makeDefault = isDefault === true || d.prepare(`SELECT COUNT(*) AS n FROM locations`).get().n === 0;
+    d.transaction(() => {
+      if (makeDefault) clearOtherDefaults(d, id);
+      d.prepare(
+        `INSERT INTO locations (id, name, address, is_default, is_active) VALUES (?, ?, ?, ?, ?)`
+      ).run(id, name, address ?? '', makeDefault ? 1 : 0, isActive !== false ? 1 : 0);
+    })();
+    send(res, { id }, 201);
+  } catch (e) { fail(res, String(e), 500); }
+});
+
+app.put('/api/ops/locations/:id', (req, res) => {
+  try {
+    const { name, address, isDefault, isActive } = req.body ?? {};
+    const d = getDb();
+    const id = req.params.id;
+    d.transaction(() => {
+      if (isDefault === true) clearOtherDefaults(d, id);
+      const r = d.prepare(
+        `UPDATE locations SET name=?, address=?, is_default=?, is_active=? WHERE id=?`
+      ).run(name, address ?? '', isDefault === true ? 1 : 0, isActive !== false ? 1 : 0, id);
+      if (r.changes === 0) throw Object.assign(new Error('Location not found.'), { code: 404 });
+    })();
+    send(res, { updated: true });
+  } catch (e) {
+    if (e.code === 404) return fail(res, e.message, 404);
+    fail(res, String(e), 500);
+  }
+});
+
+app.delete('/api/ops/locations/:id', (req, res) => {
+  try {
+    getDb().prepare(`UPDATE locations SET is_active=0 WHERE id=?`).run(req.params.id);
     send(res, { deactivated: true });
   } catch (e) { fail(res, String(e), 500); }
 });
@@ -393,7 +458,7 @@ app.get('/api/ops/matches', (_req, res) => {
     const d = getDb();
     const lk = loadLookups(d);
     const matches = d.prepare(
-      `SELECT id, league_id, match_date, court_id, scoring_type, game_type,
+      `SELECT id, league_id, match_date, court_id, location_id, scoring_type, game_type,
               team_a_id, team_b_id, score_a, score_b
        FROM matches ORDER BY match_date DESC, created_at DESC`
     ).all();
@@ -403,7 +468,7 @@ app.get('/api/ops/matches', (_req, res) => {
 
 // Shared match save logic (insert or update).
 function saveMatch(d, payload, existingId = null) {
-  const { gameType, scoringType, leagueId, courtId, date,
+  const { gameType, scoringType, leagueId, courtId, locationId, date,
           teamAId, teamBId, teamAPlayers, teamBPlayers, scoreA, scoreB } = payload;
 
   // Validation mirrors the original Azure Function.
@@ -418,6 +483,8 @@ function saveMatch(d, payload, existingId = null) {
 
   const gType = gameType === 'Ladder' ? 'Ladder' : 'Doubles';
   const sType = scoringType === 'Rally' ? 'Rally' : 'Sideout';
+  // Location is defaulted, not required: callers that omit it get the default venue.
+  const locId = locationId || defaultLocationId(d);
   const tA = gType === 'Doubles' ? (teamAId ?? null) : null;
   const tB = gType === 'Doubles' ? (teamBId ?? null) : null;
   const matchId = existingId ?? newId();
@@ -430,17 +497,17 @@ function saveMatch(d, payload, existingId = null) {
   d.transaction(() => {
     if (existingId) {
       const r = d.prepare(
-        `UPDATE matches SET league_id=?, match_date=?, court_id=?, scoring_type=?, game_type=?,
+        `UPDATE matches SET league_id=?, match_date=?, court_id=?, location_id=?, scoring_type=?, game_type=?,
                             team_a_id=?, team_b_id=?, score_a=?, score_b=? WHERE id=?`
-      ).run(leagueId, date, courtId, sType, gType, tA, tB, scoreA, scoreB, existingId);
+      ).run(leagueId, date, courtId, locId, sType, gType, tA, tB, scoreA, scoreB, existingId);
       if (r.changes === 0) throw Object.assign(new Error('Match not found.'), { code: 404 });
       d.prepare(`DELETE FROM match_participants WHERE match_id=?`).run(existingId);
     } else {
       d.prepare(
-        `INSERT INTO matches (id, league_id, match_date, court_id, scoring_type, game_type,
+        `INSERT INTO matches (id, league_id, match_date, court_id, location_id, scoring_type, game_type,
                               team_a_id, team_b_id, score_a, score_b)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(matchId, leagueId, date, courtId, sType, gType, tA, tB, scoreA, scoreB);
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(matchId, leagueId, date, courtId, locId, sType, gType, tA, tB, scoreA, scoreB);
     }
     for (let i = 0; i < teamAPlayers.length; i++)
       insertPart.run(matchId, teamAPlayers[i], 'A', tA, i + 1);
@@ -480,7 +547,8 @@ app.delete('/api/ops/matches/:id', (req, res) => {
 });
 
 // ─── DUPR export ──────────────────────────────────────────────────────────────
-// The 22-column DUPR CSV format used by the original exports/dupr endpoint.
+// The 27-column DUPR single-match import format: per-player external IDs, the
+// venue in a trailing `location` column, and scoreType moved to the last column.
 // Only includes matches with a decisive score (no ties, score > 5 for at least one side).
 
 app.get('/api/exports/dupr/dates', (_req, res) => {
@@ -505,7 +573,7 @@ app.get('/api/exports/dupr', (req, res) => {
     const lk = loadLookups(d);
 
     const matches = d.prepare(
-      `SELECT id, league_id, court_id, scoring_type, game_type, match_date, score_a, score_b
+      `SELECT id, league_id, court_id, location_id, scoring_type, game_type, match_date, score_a, score_b
        FROM matches
        WHERE match_date = ?
          AND game_type IN ('Doubles','Ladder')
@@ -522,34 +590,42 @@ app.get('/api/exports/dupr', (req, res) => {
         .find((p) => p.team_side === side && p.participant_order === order);
 
     const header = [
-      'matchType', 'scoreType', 'event', 'date',
-      'playerA1', 'playerA1DuprId', 'playerA2', 'playerA2DuprId',
-      'playerB1', 'playerB1DuprId', 'playerB2', 'playerB2DuprId',
+      'matchType', 'event', 'date',
+      'playerA1', 'playerA1DuprId', 'playerA1ExternalId',
+      'playerA2', 'playerA2DuprId', 'playerA2ExternalId',
+      'playerB1', 'playerB1DuprId', 'playerB1ExternalId',
+      'playerB2', 'playerB2DuprId', 'playerB2ExternalId',
       'teamAGame1', 'teamBGame1', 'teamAGame2', 'teamBGame2',
       'teamAGame3', 'teamBGame3', 'teamAGame4', 'teamBGame4', 'teamAGame5', 'teamBGame5',
+      'location', 'scoreType',
     ];
 
     const rows = matches.map((m) => {
       const pA1 = getPart(m.id, 'A', 1); const pA2 = getPart(m.id, 'A', 2);
       const pB1 = getPart(m.id, 'B', 1); const pB2 = getPart(m.id, 'B', 2);
 
+      // externalId is left blank — HWPL players carry no DUPR-side external ID.
       const pRow = (p) => {
-        if (!p) return ['', ''];
+        if (!p) return ['', '', ''];
         const pl = lk.playerById.get(p.player_id);
-        return [pl ? fullName(pl) : '', pl?.dupr_id ?? ''];
+        return [pl ? fullName(pl) : '', pl?.dupr_id ?? '', ''];
       };
 
       const league = lk.leagueById.get(m.league_id);
       const court = lk.courtById.get(m.court_id);
       const event = `${league?.name ?? ''} - ${m.match_date} - ${court?.name ?? 'Unassigned Court'}`;
 
+      const loc = lk.locationById.get(m.location_id);
+      const location = [loc?.name, loc?.address].filter(Boolean).join(', ');
+
       return [
         'D',
-        m.scoring_type.toUpperCase(),
         event,
         m.match_date,
         ...pRow(pA1), ...pRow(pA2), ...pRow(pB1), ...pRow(pB2),
         m.score_a, m.score_b, '', '', '', '', '', '', '', '',
+        location,
+        m.scoring_type.toUpperCase(),
       ];
     });
 

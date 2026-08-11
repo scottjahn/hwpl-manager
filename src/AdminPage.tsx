@@ -1,5 +1,5 @@
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Court, League, Player, Team } from "./types";
+import { Court, League, Location, Player, Team } from "./types";
 
 interface AuthMeClaim {
   typ?: string;
@@ -41,6 +41,8 @@ interface ManagedMatch {
   leagueId: string;
   courtId: string;
   courtName: string;
+  locationId: string;
+  locationName: string;
   scoringType: "Sideout" | "Rally";
   gameType: "Doubles" | "Ladder";
   date: string;
@@ -67,10 +69,12 @@ type PlayerForm = {
 type TeamForm = { name: string; leagueIds: string[]; isActive: boolean };
 type LeagueForm = Omit<League, "id">;
 type CourtForm = Omit<Court, "id">;
+type LocationForm = Omit<Location, "id">;
 
 interface MatchForm {
   leagueId: string;
   courtId: string;
+  locationId: string;
   scoringType: "Sideout" | "Rally";
   gameType: "Doubles" | "Ladder";
   date: string;
@@ -93,6 +97,7 @@ interface MatchSubmitDebug {
   payload: {
     leagueId: string;
     courtId: string;
+    locationId: string;
     scoringType: "Sideout" | "Rally";
     gameType: "Doubles" | "Ladder";
     date: string;
@@ -117,7 +122,7 @@ interface ApiDiagnostics {
   timestamp: string;
 }
 
-type WidgetScope = "global" | "match" | "export" | "matches" | "players" | "teams" | "leagues" | "courts" | "assign-courts";
+type WidgetScope = "global" | "match" | "export" | "matches" | "players" | "teams" | "leagues" | "courts" | "locations" | "assign-courts";
 
 interface WidgetMessage {
   scope: WidgetScope;
@@ -166,6 +171,13 @@ const emptyLeagueForm: LeagueForm = {
 
 const emptyCourtForm: CourtForm = {
   name: "",
+  isActive: true
+};
+
+const emptyLocationForm: LocationForm = {
+  name: "",
+  address: "",
+  isDefault: false,
   isActive: true
 };
 
@@ -322,6 +334,7 @@ function AdminPage() {
 
   const [leagues, setLeagues] = useState<League[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<ManagedMatch[]>([]);
@@ -330,18 +343,21 @@ function AdminPage() {
   const [teamForm, setTeamForm] = useState<TeamForm>({ ...emptyTeamForm });
   const [leagueForm, setLeagueForm] = useState<LeagueForm>({ ...emptyLeagueForm });
   const [courtForm, setCourtForm] = useState<CourtForm>({ ...emptyCourtForm });
+  const [locationForm, setLocationForm] = useState<LocationForm>({ ...emptyLocationForm });
 
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const editingTeamIdRef = useRef<string | null>(null);
   const [editingLeagueId, setEditingLeagueId] = useState<string | null>(null);
   const [editingCourtId, setEditingCourtId] = useState<string | null>(null);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const matchFormRef = useRef<HTMLElement>(null);
 
   const [matchForm, setMatchForm] = useState<MatchForm>({
     leagueId: "",
     courtId: "",
+    locationId: "",
     scoringType: "Sideout",
     gameType: "Doubles",
     date: new Date().toISOString().slice(0, 10),
@@ -402,6 +418,7 @@ function AdminPage() {
 
   const activeLeagues = useMemo(() => leagues.filter((league) => league.isActive), [leagues]);
   const activeCourts = useMemo(() => courts.filter((court) => court.isActive), [courts]);
+  const activeLocations = useMemo(() => locations.filter((location) => location.isActive), [locations]);
   const activeTeams = useMemo(() => teams.filter((team) => team.isActive), [teams]);
   const activePlayers = useMemo(() => players.filter((player) => player.isActive), [players]);
   const teamNameById = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
@@ -514,6 +531,15 @@ function AdminPage() {
     }
     return list;
   }, [activeCourts, courts, matchForm.courtId]);
+
+  const matchFormLocations = useMemo(() => {
+    const list = [...activeLocations];
+    if (matchForm.locationId && !list.some((l) => l.id === matchForm.locationId)) {
+      const found = locations.find((l) => l.id === matchForm.locationId);
+      if (found) list.unshift(found);
+    }
+    return list;
+  }, [activeLocations, locations, matchForm.locationId]);
 
   const matchFormTeams = useMemo(() => {
     const list = [...activeTeams];
@@ -892,20 +918,22 @@ function AdminPage() {
 
   const loadAdminData = useCallback(async (): Promise<void> => {
     let base = adminApiBase;
-    let [lRes, cRes, tRes, pRes, mRes] = await Promise.all([
+    let [lRes, cRes, locRes, tRes, pRes, mRes] = await Promise.all([
       authFetch(`${base}/leagues`),
       authFetch(`${base}/courts`),
+      authFetch(`${base}/locations`),
       authFetch(`${base}/teams`),
       authFetch(`${base}/players`),
       authFetch(`${base}/matches`)
     ]);
 
     // If all collection endpoints are missing, try the alternate namespace.
-    if ([lRes, cRes, tRes, pRes, mRes].every((res) => res.status === 404)) {
+    if ([lRes, cRes, locRes, tRes, pRes, mRes].every((res) => res.status === 404)) {
       base = base === "/api/ops" ? "/api/admin" : "/api/ops";
-      [lRes, cRes, tRes, pRes, mRes] = await Promise.all([
+      [lRes, cRes, locRes, tRes, pRes, mRes] = await Promise.all([
         authFetch(`${base}/leagues`),
         authFetch(`${base}/courts`),
+        authFetch(`${base}/locations`),
         authFetch(`${base}/teams`),
         authFetch(`${base}/players`),
         authFetch(`${base}/matches`)
@@ -913,26 +941,28 @@ function AdminPage() {
       setAdminApiBase(base);
     }
 
-    if ([lRes, cRes, tRes, pRes, mRes].some((res) => res.status === 401 || res.status === 403)) {
-      const statusSummary = `leagues=${lRes.status}, courts=${cRes.status}, teams=${tRes.status}, players=${pRes.status}, matches=${mRes.status}`;
+    const statusSummary = `leagues=${lRes.status}, courts=${cRes.status}, locations=${locRes.status}, teams=${tRes.status}, players=${pRes.status}, matches=${mRes.status}`;
+
+    if ([lRes, cRes, locRes, tRes, pRes, mRes].some((res) => res.status === 401 || res.status === 403)) {
       showWidgetMessage("global", `Signed in as admin, but one or more admin data endpoints were denied (${statusSummary}) via ${base}.`, true);
       return;
     }
 
-    if (!lRes.ok || !cRes.ok || !tRes.ok || !pRes.ok || !mRes.ok) {
-      const statusSummary = `leagues=${lRes.status}, courts=${cRes.status}, teams=${tRes.status}, players=${pRes.status}, matches=${mRes.status}`;
+    if (!lRes.ok || !cRes.ok || !locRes.ok || !tRes.ok || !pRes.ok || !mRes.ok) {
       showWidgetMessage("global", `Signed in as admin, but failed to load admin data (${statusSummary}) via ${base}.`, true);
       return;
     }
 
     const loadedLeagues: League[] = await lRes.json();
     const loadedCourts: Court[] = await cRes.json();
+    const loadedLocations: Location[] = await locRes.json();
     const loadedTeams: Team[] = await tRes.json();
     const loadedPlayers: Player[] = await pRes.json();
     const loadedMatches: ManagedMatch[] = await mRes.json();
 
     setLeagues(loadedLeagues);
     setCourts(loadedCourts);
+    setLocations(loadedLocations);
     setTeams(loadedTeams);
     setPlayers(loadedPlayers);
     setMatches(loadedMatches);
@@ -951,6 +981,8 @@ function AdminPage() {
 
     const activeLoadedLeagues = loadedLeagues.filter((league) => league.isActive);
     const activeLoadedCourts = loadedCourts.filter((court) => court.isActive);
+    const activeLoadedLocations = loadedLocations.filter((location) => location.isActive);
+    const defaultLocation = activeLoadedLocations.find((location) => location.isDefault) ?? activeLoadedLocations[0];
 
     if (!editingTeamIdRef.current) {
       const activeLoadedLeagueIds = activeLoadedLeagues.map((l) => l.id);
@@ -960,7 +992,8 @@ function AdminPage() {
     setMatchForm((prev) => ({
       ...prev,
       leagueId: prev.leagueId || activeLoadedLeagues[0]?.id || "",
-      courtId: prev.courtId || activeLoadedCourts[0]?.id || ""
+      courtId: prev.courtId || activeLoadedCourts[0]?.id || "",
+      locationId: prev.locationId || defaultLocation?.id || ""
     }));
 
     try {
@@ -1112,6 +1145,56 @@ function AdminPage() {
     }
   };
 
+  const onSaveLocation = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const res = await authFetch(editingLocationId ? `${adminApiBase}/locations/${editingLocationId}` : `${adminApiBase}/locations`, {
+        method: editingLocationId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(locationForm)
+      });
+      if (!res.ok) throw new Error("failed");
+      showWidgetMessage("locations", editingLocationId ? "Location updated." : "Location added.");
+      setEditingLocationId(null);
+      setLocationForm({ ...emptyLocationForm });
+      await loadAdminData();
+    } catch {
+      showWidgetMessage("locations", "Error saving location.", true);
+    }
+  };
+
+  const saveLocation = async (location: Location, changes: Partial<LocationForm>, successMessage: string) => {
+    try {
+      const res = await authFetch(`${adminApiBase}/locations/${location.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: location.name,
+          address: location.address,
+          isDefault: location.isDefault,
+          isActive: location.isActive,
+          ...changes
+        })
+      });
+      if (!res.ok) throw new Error("failed");
+      showWidgetMessage("locations", successMessage);
+      await loadAdminData();
+    } catch {
+      showWidgetMessage("locations", "Error updating location.", true);
+    }
+  };
+
+  const onToggleLocationActive = (location: Location) =>
+    saveLocation(
+      location,
+      // A deactivated location can't stay the default for new matches.
+      { isActive: !location.isActive, isDefault: location.isActive ? false : location.isDefault },
+      location.isActive ? "Location deactivated." : "Location activated."
+    );
+
+  const onMakeLocationDefault = (location: Location) =>
+    saveLocation(location, { isDefault: true, isActive: true }, `${location.name} is now the default location.`);
+
   const onTogglePlayerActive = async (player: Player) => {
     try {
       const res = await authFetch(`${adminApiBase}/players/${player.id}`, {
@@ -1248,6 +1331,7 @@ function AdminPage() {
     setMatchForm({
       leagueId: match.leagueId,
       courtId: match.courtId,
+      locationId: match.locationId,
       scoringType: match.scoringType,
       gameType: match.gameType,
       date: match.date,
@@ -1306,6 +1390,11 @@ function AdminPage() {
       return;
     }
 
+    if (!matchForm.locationId) {
+      failMatchValidation("Please select a location.");
+      return;
+    }
+
     if (matchForm.gameType === "Doubles" && (!matchForm.teamAId || !matchForm.teamBId)) {
       failMatchValidation("Please select both teams.");
       return;
@@ -1341,6 +1430,7 @@ function AdminPage() {
       const payload = {
         leagueId: matchForm.leagueId,
         courtId: matchForm.courtId,
+        locationId: matchForm.locationId,
         scoringType: matchForm.scoringType,
         gameType: matchForm.gameType,
         date: matchForm.date,
@@ -1411,6 +1501,7 @@ function AdminPage() {
       setMatchForm({
         leagueId: matchForm.leagueId,
         courtId: matchForm.courtId,
+        locationId: matchForm.locationId,
         scoringType: matchForm.scoringType,
         gameType: matchForm.gameType,
         date: matchForm.date,
@@ -1598,16 +1689,29 @@ function AdminPage() {
                 ))}
               </select>
             </label>
-            <label>
-              Court
-              <select value={matchForm.courtId} onChange={(e) => setMatchForm((prev) => ({ ...prev, courtId: e.target.value }))}>
-                {matchFormCourts.map((court) => (
-                  <option key={court.id} value={court.id}>
-                    {court.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="teams-grid">
+              <label>
+                Location
+                <select value={matchForm.locationId} onChange={(e) => setMatchForm((prev) => ({ ...prev, locationId: e.target.value }))}>
+                  {matchFormLocations.length === 0 ? <option value="">No locations available</option> : null}
+                  {matchFormLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Court
+                <select value={matchForm.courtId} onChange={(e) => setMatchForm((prev) => ({ ...prev, courtId: e.target.value }))}>
+                  {matchFormCourts.map((court) => (
+                    <option key={court.id} value={court.id}>
+                      {court.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="teams-grid">
               <label>
                 Scoring Type
@@ -1905,7 +2009,7 @@ git push`}</pre>
             {filteredMatches.map((match) => (
               <li key={match.id}>
                 <span>
-                  {match.date} - {match.teamAName} ({match.scoreA}) vs {match.teamBName} ({match.scoreB}) - {match.gameType}, {match.scoringType}, {match.courtName || "No court"}
+                  {match.date} - {match.teamAName} ({match.scoreA}) vs {match.teamBName} ({match.scoreB}) - {match.gameType}, {match.scoringType}, {match.courtName || "No court"}, {match.locationName || "No location"}
                 </span>
                 <div>
                   <button type="button" onClick={() => onEditMatch(match)}>
@@ -2155,6 +2259,81 @@ git push`}</pre>
                   </button>
                   <button type="button" className={court.isActive ? "danger" : ""} onClick={() => onToggleCourtActive(court)}>
                     {court.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="panel module-manage-locations">
+          <div className="panel-header">
+            <h3>Manage Locations</h3>
+            <p>Add, activate/deactivate, or modify venues. New matches start at the default location.</p>
+          </div>
+          {renderWidgetMessage("locations")}
+          <form className="match-form" onSubmit={onSaveLocation}>
+            <label>
+              Location Name
+              <input value={locationForm.name} onChange={(e) => setLocationForm((prev) => ({ ...prev, name: e.target.value }))} required />
+            </label>
+            <label>
+              Address
+              <input value={locationForm.address} onChange={(e) => setLocationForm((prev) => ({ ...prev, address: e.target.value }))} />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal" }}>
+              <input
+                type="checkbox"
+                checked={locationForm.isDefault}
+                onChange={(e) => setLocationForm((prev) => ({ ...prev, isDefault: e.target.checked }))}
+              />
+              Default location for new matches
+            </label>
+            <button type="submit">{editingLocationId ? "Update Location" : "Add Location"}</button>
+            {editingLocationId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingLocationId(null);
+                  setLocationForm({ ...emptyLocationForm });
+                }}
+              >
+                Cancel Edit
+              </button>
+            ) : null}
+          </form>
+          <ul className="entity-list">
+            {locations.map((location) => (
+              <li key={location.id}>
+                <span>
+                  {location.name}
+                  {location.isDefault ? " (default)" : ""}
+                  {location.address ? <> - {location.address}</> : null}
+                </span>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingLocationId(location.id);
+                      setLocationForm({
+                        name: location.name,
+                        address: location.address,
+                        isDefault: location.isDefault,
+                        isActive: location.isActive
+                      });
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMakeLocationDefault(location)}
+                    disabled={location.isDefault}
+                  >
+                    Make Default
+                  </button>
+                  <button type="button" className={location.isActive ? "danger" : ""} onClick={() => onToggleLocationActive(location)}>
+                    {location.isActive ? "Deactivate" : "Activate"}
                   </button>
                 </div>
               </li>

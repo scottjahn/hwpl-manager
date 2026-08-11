@@ -18,6 +18,12 @@ const SCHEMA_PATH = join(ROOT, 'database', 'schema.sqlite.sql');
 
 let db;
 
+/** The club's home venue — seeded the first time the locations table is empty. */
+export const HOME_LOCATION = {
+  name: 'WFCU Centre Sports Gym',
+  address: '8787 McHugh St., Windsor, Ontario, Canada, N8S 0A1',
+};
+
 /** Open (and lazily initialise) the SQLite database. */
 export function getDb() {
   if (db) return db;
@@ -26,11 +32,41 @@ export function getDb() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(readFileSync(SCHEMA_PATH, 'utf8')); // idempotent (CREATE ... IF NOT EXISTS)
+  migrate(db);
   return db;
 }
 
 export const newId = () => crypto.randomUUID();
 const bool = (v) => !!v;
+
+/**
+ * Schema changes that CREATE TABLE IF NOT EXISTS can't apply to a database that
+ * already has rows. Idempotent — runs on every open.
+ */
+function migrate(d) {
+  const matchColumns = d.prepare(`PRAGMA table_info(matches)`).all().map((c) => c.name);
+  if (!matchColumns.includes('location_id')) {
+    d.exec(`ALTER TABLE matches ADD COLUMN location_id TEXT REFERENCES locations(id)`);
+  }
+
+  if (d.prepare(`SELECT COUNT(*) AS n FROM locations`).get().n === 0) {
+    d.prepare(
+      `INSERT INTO locations (id, name, address, is_default, is_active) VALUES (?, ?, ?, 1, 1)`
+    ).run(newId(), HOME_LOCATION.name, HOME_LOCATION.address);
+  }
+
+  // Matches recorded before locations existed (or before a default was set)
+  // belong to the default venue.
+  const defaultId = defaultLocationId(d);
+  if (defaultId) {
+    d.prepare(`UPDATE matches SET location_id = ? WHERE location_id IS NULL`).run(defaultId);
+  }
+}
+
+/** Id of the location flagged as default, or null when none is. */
+export function defaultLocationId(d = getDb()) {
+  return d.prepare(`SELECT id FROM locations WHERE is_default = 1`).get()?.id ?? null;
+}
 
 /**
  * Load the entire database into plain JS objects (camelCase), with each match's
@@ -53,6 +89,13 @@ export function loadRaw(d = getDb()) {
   const courts = d.prepare(
     `SELECT id, name, is_active FROM courts`
   ).all().map((r) => ({ id: r.id, name: r.name, isActive: bool(r.is_active) }));
+
+  const locations = d.prepare(
+    `SELECT id, name, address, is_default, is_active FROM locations`
+  ).all().map((r) => ({
+    id: r.id, name: r.name, address: r.address,
+    isDefault: bool(r.is_default), isActive: bool(r.is_active),
+  }));
 
   const teamLeagues = d.prepare(
     `SELECT team_id, league_id FROM team_leagues`
@@ -79,17 +122,18 @@ export function loadRaw(d = getDb()) {
   }
 
   const matches = d.prepare(
-    `SELECT id, league_id, match_date, court_id, scoring_type, game_type,
+    `SELECT id, league_id, match_date, court_id, location_id, scoring_type, game_type,
             team_a_id, team_b_id, score_a, score_b, created_at
      FROM matches
      ORDER BY match_date DESC, created_at DESC`
   ).all().map((r) => ({
     id: r.id, leagueId: r.league_id, matchDate: r.match_date, courtId: r.court_id,
+    locationId: r.location_id,
     scoringType: r.scoring_type, gameType: r.game_type,
     teamAId: r.team_a_id, teamBId: r.team_b_id,
     scoreA: r.score_a, scoreB: r.score_b, createdAt: r.created_at,
     participants: participantsByMatch.get(r.id) ?? [],
   }));
 
-  return { leagues, teams, courts, teamLeagues, players, matches };
+  return { leagues, teams, courts, locations, teamLeagues, players, matches };
 }

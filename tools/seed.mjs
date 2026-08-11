@@ -2,9 +2,11 @@
 //   npm run seed
 // Safe to re-run: it skips seeding if any league already exists.
 
-import { getDb, newId } from './db.mjs';
+import { getDb, newId, defaultLocationId } from './db.mjs';
 
 const d = getDb();
+// getDb() seeds the club's home venue on first open.
+const locationId = defaultLocationId(d);
 
 if (d.prepare('SELECT COUNT(*) AS n FROM leagues').get().n > 0) {
   console.log('Database already has data — skipping seed.');
@@ -49,9 +51,9 @@ const seed = d.transaction(() => {
   });
 
   const insertMatch = d.prepare(
-    `INSERT INTO matches (id, league_id, match_date, court_id, scoring_type, game_type,
+    `INSERT INTO matches (id, league_id, match_date, court_id, location_id, scoring_type, game_type,
                           team_a_id, team_b_id, score_a, score_b)
-     VALUES (@id, @leagueId, @matchDate, @courtId, @scoringType, @gameType,
+     VALUES (@id, @leagueId, @matchDate, @courtId, @locationId, @scoringType, @gameType,
              @teamAId, @teamBId, @scoreA, @scoreB)`
   );
   const insertPart = d.prepare(
@@ -63,7 +65,7 @@ const seed = d.transaction(() => {
   const doubles = (matchDate, courtId, scoreA, scoreB) => {
     const id = newId();
     insertMatch.run({
-      id, leagueId, matchDate, courtId, scoringType: 'Sideout', gameType: 'Doubles',
+      id, leagueId, matchDate, courtId, locationId, scoringType: 'Sideout', gameType: 'Doubles',
       teamAId: teams[0], teamBId: teams[1], scoreA, scoreB,
     });
     insertPart.run(id, players[0], 'A', teams[0], 1);
@@ -77,7 +79,7 @@ const seed = d.transaction(() => {
   // Ladder: ad-hoc pairs, no teams.
   const ladderId = newId();
   insertMatch.run({
-    id: ladderId, leagueId, matchDate: '2026-03-15', courtId: courts[0],
+    id: ladderId, leagueId, matchDate: '2026-03-15', courtId: courts[0], locationId,
     scoringType: 'Rally', gameType: 'Ladder',
     teamAId: null, teamBId: null, scoreA: 11, scoreB: 6,
   });
