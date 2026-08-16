@@ -1,0 +1,7 @@
+# Cloudflare Pages only — GitHub Pages ignores this file.
+#
+# The site moved to https://scottjahn.github.io/hwpl-manager/. This keeps every
+# old Cloudflare URL working: /player/alice-nguyen → /hwpl-manager/player/alice-nguyen.
+# On Pages, redirects are followed even when a static asset matches the path, so
+# the stale assets in the last Cloudflare build are never served.
+/*  https://scottjahn.github.io/hwpl-manager/:splat  301

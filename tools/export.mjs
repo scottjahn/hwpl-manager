@@ -1,6 +1,6 @@
 // Build-time export: dump SQLite to the static JSON the deployed site fetches.
-// Run locally after each weekly update, then commit public/data so Cloudflare
-// Pages can build without the database.
+// Run locally after each weekly update, then commit public/data so the GitHub
+// Pages workflow can build without the database.
 //
 //   npm run export
 

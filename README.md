@@ -8,8 +8,8 @@ Public statistics portal and local admin tool for the Hiram Walker Pickleball Le
 |---|---|
 | **Database** | SQLite file (`data/hwpl.db`) — lives on your local machine, not in the repo or on any server |
 | **Admin tool** | Local Express server (`tools/admin-server.mjs`) on `127.0.0.1:8787` — weekly data entry, never deployed |
-| **Public site** | Fully static — built from a snapshot of the database (`public/data/stats/`) and deployed to Cloudflare Pages |
-| **Hosting** | [Cloudflare Pages](https://pages.cloudflare.com) — free, push-to-deploy via GitHub |
+| **Public site** | Fully static — built from a snapshot of the database (`public/data/stats/`) and deployed to GitHub Pages |
+| **Hosting** | [GitHub Pages](https://scottjahn.github.io/hwpl-manager/) — free, push-to-deploy via GitHub Actions |
 
 The public site has no live backend. All stats are pre-computed at build time and served as static JSON.
 
@@ -50,12 +50,13 @@ Then either seed demo data or import from Azure SQL (see below).
    npm run export
    ```
 
-3. **Publish** — commit the snapshot and push; Cloudflare redeploys in ~30 seconds:
+3. **Publish** — commit the snapshot and push; the Pages workflow redeploys in a minute or two:
    ```bash
    git add public/data/
    git commit -m "Stats update $(date +%Y-%m-%d)"
    git push
    ```
+   Watch the run under the repo's **Actions** tab if you want to confirm it landed.
 
 ## Scripts
 
@@ -115,15 +116,28 @@ node tools/create-favicon.mjs
 git add public/favicon.ico && git commit -m "Update favicon"
 ```
 
-## Cloudflare Pages — build settings
+## Deployment — GitHub Pages
 
-| Setting | Value |
-|---|---|
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Node.js version | `22` (set via `.node-version`) |
+The site lives at **https://scottjahn.github.io/hwpl-manager/** and is published by
+`.github/workflows/deploy.yml` on every push to `main` (or manually via *Actions → Deploy to
+GitHub Pages → Run workflow*). No secrets or environment variables are required — the workflow
+authenticates with the repo's built-in Pages token.
 
-No environment variables are required.
+One-time repo setting: **Settings → Pages → Build and deployment → Source = GitHub Actions**.
+
+Because it's a project site, everything is served from the `/hwpl-manager/` sub-path:
+
+- `vite.config.ts` sets `base` to `/hwpl-manager/` in production and `/` in dev, so the local
+  admin panel still lives at `http://localhost:5173/admin`.
+- `src/basePath.ts` provides `withBase()` / `stripBase()`. **Any new in-app link, image, or fetch
+  path must go through `withBase()`**, and anything read off `window.location.pathname` through
+  `stripBase()` — a bare `/player/…` will 404 in production.
+- The build copies `index.html` → `404.html`, which is how GitHub Pages hands deep links like
+  `/hwpl-manager/player/alice-nguyen` back to the SPA. Those responses carry a 404 status code
+  by design; the page itself renders correctly.
+
+`npm run preview` serves the production build at the same sub-path, so it's a faithful local
+check of the deployed site.
 
 ## Project structure
 

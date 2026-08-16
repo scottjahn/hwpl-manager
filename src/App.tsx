@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicMatch, RecentMatch, SessionCourtEntry, StatsRow } from "./types";
 import { statsUrl, sessionUrl } from "./dataSource";
+import { stripBase, withBase } from "./basePath";
 
 interface StatAccumulator {
   gamesPlayed: number;
@@ -114,9 +115,9 @@ let gTeamSlugById   = new Map<string, string>();
 let gTeamBySlug     = new Map<string, string>();
 
 const getPlayerRoute = (id: string) =>
-  `/player/${gPlayerSlugById.get(id) ?? encodeURIComponent(id)}`;
+  withBase(`/player/${gPlayerSlugById.get(id) ?? encodeURIComponent(id)}`);
 const getTeamRoute = (id: string | null) =>
-  id ? `/team/${gTeamSlugById.get(id) ?? encodeURIComponent(id)}` : null;
+  id ? withBase(`/team/${gTeamSlugById.get(id) ?? encodeURIComponent(id)}`) : null;
 
 const TeamLink = ({ id, name }: { id: string | null; name: string }) => (
   id ? <a className="entity-link" href={getTeamRoute(id)!}>{name}</a> : <span>{name}</span>
@@ -349,7 +350,7 @@ const TeamDetailView = ({
         <p className="eyebrow">Team View</p>
         <h1>{teamName}</h1>
         <p>League and court performance, player contributions, opponents, and full match history.</p>
-        <p><a className="hero-link" href="/">Back to main dashboard</a></p>
+        <p><a className="hero-link" href={withBase("/")}>Back to main dashboard</a></p>
       </section>
 
       <section className="panel">
@@ -777,7 +778,7 @@ const PlayerDetailView = ({
         <p className="eyebrow">Player View</p>
         <h1>{playerName}</h1>
         <p>League/team/court performance, head-to-head trends, and complete match history.</p>
-        <p><a className="hero-link" href="/">Back to main dashboard</a></p>
+        <p><a className="hero-link" href={withBase("/")}>Back to main dashboard</a></p>
       </section>
 
       <section className="panel">
@@ -1144,7 +1145,7 @@ function App() {
     [gTeamSlugById, gTeamBySlug] = buildSlugMap(teamNameById);
   }
 
-  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const path = stripBase(window.location.pathname).replace(/\/+$/, "") || "/";
   const teamPathMatch = path.match(/^\/team\/([^/]+)$/i);
   const playerPathMatch = path.match(/^\/player\/([^/]+)$/i);
   const teamRouteSlug = teamPathMatch ? decodePathSegment(teamPathMatch[1]) : "";
@@ -1175,7 +1176,7 @@ function App() {
         <>
           <section className="hero">
             <div className="hero-brand-row">
-              <img className="club-logo" src="/brand/HW PickleBall Logo.png" alt="Hiram Walker Pickleball Club logo" />
+              <img className="club-logo" src={withBase("/brand/HW PickleBall Logo.png")} alt="Hiram Walker Pickleball Club logo" />
               <div>
                 <p className="eyebrow">Hiram Walker Pickleball League</p>
                 <h1>League Statistics Portal</h1>
@@ -1422,7 +1423,7 @@ function App() {
           <footer className="panel admin-entry">
             {import.meta.env.DEV && (
               <>
-                <a className="admin-link" href="/admin">Admin</a>
+                <a className="admin-link" href={withBase("/admin")}>Admin</a>
                 <span className="admin-entry-sep" aria-hidden="true">·</span>
               </>
             )}

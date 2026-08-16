@@ -1950,7 +1950,7 @@ function AdminPage() {
             </button>
           </div>
           <div className="panel-header" style={{ marginTop: "1.2rem" }}>
-            <h3>Publish to Cloudflare</h3>
+            <h3>Publish to GitHub Pages</h3>
             <p>Run in the project directory to export stats and deploy the public site.</p>
           </div>
           <pre className="publish-steps">{`npm run export

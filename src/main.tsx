@@ -1,9 +1,10 @@
 import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { stripBase, withBase } from "./basePath";
 import "./styles.css";
 
-const isAdminRoute = window.location.pathname.toLowerCase().startsWith("/admin");
+const isAdminRoute = stripBase(window.location.pathname).toLowerCase().startsWith("/admin");
 
 // The admin panel only works against the local admin server (tools/admin-server.mjs).
 // In production the static site has no backend — Vite's dead-code elimination removes
@@ -20,7 +21,7 @@ const AdminNotice = () => (
       To make changes, run <code>npm run dev</code> on your machine and open{" "}
       <a href="http://localhost:5173/admin">http://localhost:5173/admin</a>.
     </p>
-    <p><a href="/">← Back to league stats</a></p>
+    <p><a href={withBase("/")}>← Back to league stats</a></p>
   </main>
 );
 
