@@ -80,7 +80,7 @@ body {
 
 .hero p {
   margin: 0;
-  max-width: 60ch;
+  max-width: min(100%, 110ch);
   color: #d6fff8;
 }
 
@@ -499,12 +499,38 @@ button:hover {
   order: 8;
 }
 
+/* Manage panels keep a bounded height; their record list scrolls internally
+   instead of stretching the admin page. */
+.module-manage-matches,
+.module-manage-players,
+.module-manage-teams,
+.module-manage-leagues,
+.module-manage-courts,
+.module-manage-locations {
+  display: flex;
+  flex-direction: column;
+}
+
+.module-manage-matches .entity-list,
+.module-manage-players .entity-list,
+.module-manage-teams .entity-list,
+.module-manage-leagues .entity-list,
+.module-manage-courts .entity-list,
+.module-manage-locations .entity-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .entity-list {
   list-style: none;
   margin: 0.8rem 0 0;
-  padding: 0;
+  padding: 0.15rem 0.4rem 0.15rem 0.15rem;
   display: grid;
+  align-content: start;
   gap: 0.45rem;
+  max-height: 40rem; /* roughly 10 rows */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .entity-list li {
@@ -649,72 +675,6 @@ button:hover {
   color: #d6fff8;
 }
 
-.admin-identity-box {
-  margin: 0.9rem 0;
-  padding: 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.admin-identity-box h4 {
-  margin: 0 0 0.3rem;
-  font-size: 0.95rem;
-}
-
-.admin-identity-box p {
-  margin: 0.1rem 0 0.6rem;
-  font-size: 0.84rem;
-  color: var(--ink-soft);
-}
-
-.admin-identity-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.admin-identity-row code {
-  display: block;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  overflow-wrap: anywhere;
-  font-size: 0.78rem;
-}
-
-.admin-identity-box-hero {
-  margin-top: 0.9rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.admin-identity-box-hero p {
-  color: #d6fff8;
-}
-
-.admin-identity-box-hero .admin-identity-row code {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.admin-identity-box-hero .status-msg {
-  color: #d6fff8;
-}
-
-.auth-debug {
-  margin: 0.6rem 0 0;
-  padding: 0.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 0.73rem;
-  line-height: 1.35;
-  max-height: 180px;
-  overflow: auto;
-  white-space: pre-wrap;
-}
 
 @keyframes float-in {
   from {

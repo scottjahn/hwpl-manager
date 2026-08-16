@@ -1,41 +1,6 @@
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Court, League, Location, Player, Team } from "./types";
 
-interface AuthMeClaim {
-  typ?: string;
-  type?: string;
-  val?: string;
-  value?: string;
-}
-
-interface AuthMePrincipal {
-  userId?: string;
-  claims?: AuthMeClaim[];
-}
-
-interface AuthMeLegacyEntry {
-  user_id?: string;
-  user_claims?: AuthMeClaim[];
-}
-
-interface AuthMeCurrentEntry {
-  clientPrincipal?: AuthMePrincipal;
-}
-
-interface DebugAuthResponse {
-  isAuthenticated?: boolean;
-  isAdmin?: boolean;
-  objectId?: string;
-  candidateIds?: string[];
-  principalName?: string;
-  roles?: string[];
-  headerPresence?: {
-    hasClientPrincipal?: boolean;
-    hasClientPrincipalId?: boolean;
-    hasClientPrincipalName?: boolean;
-  };
-}
-
 interface ManagedMatch {
   id: string;
   leagueId: string;
@@ -88,64 +53,12 @@ interface MatchForm {
   scoreB: string;
 }
 
-interface MatchSubmitDebug {
-  timestamp: string;
-  phase: "requesting" | "response" | "network-error" | "refresh-success" | "refresh-failed";
-  mode: "create" | "update";
-  endpoint: string;
-  editingMatchId: string | null;
-  payload: {
-    leagueId: string;
-    courtId: string;
-    locationId: string;
-    scoringType: "Sideout" | "Rally";
-    gameType: "Doubles" | "Ladder";
-    date: string;
-    teamAId: string | null;
-    teamBId: string | null;
-    teamAPlayers: string[];
-    teamBPlayers: string[];
-    scoreA: number;
-    scoreB: number;
-  };
-  response?: {
-    status: number;
-    ok: boolean;
-    rawBody: string;
-    parsedBody: unknown;
-  };
-  error?: string;
-}
-
-interface ApiDiagnostics {
-  version: string;
-  timestamp: string;
-}
-
 type WidgetScope = "global" | "match" | "export" | "matches" | "players" | "teams" | "leagues" | "courts" | "locations" | "assign-courts";
 
 interface WidgetMessage {
   scope: WidgetScope;
   text: string;
   isError: boolean;
-}
-
-interface TeamToggleDebug {
-  timestamp: string;
-  endpoint: string;
-  teamId: string;
-  previousIsActive: boolean;
-  payload: {
-    name: string;
-    isActive: boolean;
-  };
-  response?: {
-    status: number;
-    ok: boolean;
-    rawBody: string;
-    parsedBody: unknown;
-  };
-  error?: string;
 }
 
 const emptyPlayerForm: PlayerForm = {
@@ -181,12 +94,9 @@ const emptyLocationForm: LocationForm = {
   isActive: true
 };
 
-const authFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-  return fetch(input, {
-    ...init,
-    credentials: "include"
-  });
-};
+// The admin API is the local-only server in tools/admin-server.mjs, reached
+// through the Vite dev proxy. Same origin, no auth.
+const apiFetch = (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init);
 
 const ASSIGNMENTS_STORAGE_KEY = "hwpl-admin-court-assignments-v1";
 const MIN_GAMES_PER_MATCH = 1;
@@ -325,12 +235,7 @@ const buildRoundRobinRows = (teamIds: string[]): RoundRobinRow[] => {
 };
 
 function AdminPage() {
-  const [authLoading, setAuthLoading] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [authMessage, setAuthMessage] = useState("");
-  const [entraObjectId, setEntraObjectId] = useState("");
-  const [copyMessage, setCopyMessage] = useState("");
-  const [authDebug, setAuthDebug] = useState("");
+  const [loadingAdminData, setLoadingAdminData] = useState(true);
 
   const [leagues, setLeagues] = useState<League[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
@@ -377,9 +282,6 @@ function AdminPage() {
   const [matchTeamFilterId, setMatchTeamFilterId] = useState("");
   const [matchPlayerFilterId, setMatchPlayerFilterId] = useState("");
   const [matchDateFilter, setMatchDateFilter] = useState("");
-  const [lastMatchSubmitDebug, setLastMatchSubmitDebug] = useState<MatchSubmitDebug | null>(null);
-  const [lastTeamToggleDebug, setLastTeamToggleDebug] = useState<TeamToggleDebug | null>(null);
-  const [apiDiagnostics, setApiDiagnostics] = useState<ApiDiagnostics | null>(null);
   const [widgetMessage, setWidgetMessage] = useState<WidgetMessage | null>(null);
   const [csvDate, setCsvDate] = useState("");
   const [matchDates, setMatchDates] = useState<string[]>([]);
@@ -717,15 +619,22 @@ function AdminPage() {
       <th>Team 2</th>
     `).join("");
 
+    // An even number of teams means every team plays every round, so the Bye
+    // column would be empty on every row — drop it entirely.
+    const hasByes = rows.some((row) => row.byeTeamId !== null);
+
     const bodyRows = rows.map((row) => {
       const byeName = row.byeTeamId ? (teamNameById.get(row.byeTeamId) ?? row.byeTeamId) : "-";
       const teamAName = teamNameById.get(row.teamAId) ?? row.teamAId;
       const teamBName = teamNameById.get(row.teamBId) ?? row.teamBId;
       const scoreCells = Array.from({ length: gameCount }, () => "<td></td><td></td>").join("");
+      const byeCell = hasByes && row.rowIndexWithinRound === 0
+        ? `<td class="bye-col" rowspan="${row.matchesInRound}">${escapeHtml(byeName)}</td>`
+        : "";
 
       return `
         <tr>
-          ${row.rowIndexWithinRound === 0 ? `<td rowspan="${row.matchesInRound}">${escapeHtml(byeName)}</td>` : ""}
+          ${byeCell}
           <td>${escapeHtml(teamAName)}</td>
           <td class="vs-cell">vs</td>
           <td>${escapeHtml(teamBName)}</td>
@@ -777,8 +686,7 @@ function AdminPage() {
       thead th {
         background: #f2f2f2;
       }
-      td:first-child,
-      th:first-child {
+      .bye-col {
         width: 13%;
       }
       .court-col {
@@ -813,7 +721,7 @@ function AdminPage() {
     <table>
       <thead>
         <tr>
-          <th rowspan="2">Bye</th>
+          ${hasByes ? `<th class="bye-col" rowspan="2">Bye</th>` : ""}
           <th colspan="3">${escapeHtml(court.name)}</th>
           ${scoreHeaders}
         </tr>
@@ -849,107 +757,35 @@ function AdminPage() {
     showWidgetMessage("assign-courts", `Generated a printable schedule for ${court.name}.`);
   };
 
-  const extractObjectId = (entry: AuthMeLegacyEntry | AuthMeCurrentEntry | undefined): string => {
-    if (!entry) return "";
-
-    const currentPrincipal = (entry as AuthMeCurrentEntry).clientPrincipal;
-    if (currentPrincipal?.userId) return currentPrincipal.userId;
-
-    const currentClaims = currentPrincipal?.claims ?? [];
-    const currentOidClaim = currentClaims.find(
-      (claim) =>
-        claim.typ === "oid" ||
-        claim.type === "oid" ||
-        claim.typ === "http://schemas.microsoft.com/identity/claims/objectidentifier"
-        || claim.type === "http://schemas.microsoft.com/identity/claims/objectidentifier"
-    );
-    const currentOidValue = currentOidClaim?.val ?? currentOidClaim?.value;
-    if (currentOidValue) return currentOidValue;
-
-    const legacyEntry = entry as AuthMeLegacyEntry;
-    if (legacyEntry.user_id) return legacyEntry.user_id;
-
-    const claims = legacyEntry.user_claims ?? [];
-    const oidClaim = claims.find(
-      (claim) =>
-        claim.typ === "oid" ||
-        claim.type === "oid" ||
-        claim.typ === "http://schemas.microsoft.com/identity/claims/objectidentifier"
-        || claim.type === "http://schemas.microsoft.com/identity/claims/objectidentifier"
-    );
-
-    return oidClaim?.val ?? oidClaim?.value ?? "";
-  };
-
-  const loadSignedInObjectId = useCallback(async (): Promise<string> => {
-    try {
-      const res = await authFetch("/.auth/me");
-      if (!res.ok) {
-        setEntraObjectId("");
-        return "";
-      }
-
-      const data = (await res.json()) as Array<AuthMeLegacyEntry | AuthMeCurrentEntry>;
-      const objectId = extractObjectId(data?.[0]);
-      setEntraObjectId(objectId);
-      return objectId;
-    } catch {
-      setEntraObjectId("");
-      return "";
-    }
-  }, []);
-
-  const loadAuthDebug = useCallback(async (): Promise<DebugAuthResponse> => {
-    try {
-      const res = await authFetch("/api/debug/auth");
-      if (!res.ok) {
-        setAuthDebug("");
-        return {};
-      }
-
-      const payload = (await res.json()) as DebugAuthResponse;
-      setAuthDebug(JSON.stringify(payload, null, 2));
-      return payload;
-    } catch {
-      setAuthDebug("");
-      return {};
-    }
-  }, []);
-
   const loadAdminData = useCallback(async (): Promise<void> => {
     let base = adminApiBase;
     let [lRes, cRes, locRes, tRes, pRes, mRes] = await Promise.all([
-      authFetch(`${base}/leagues`),
-      authFetch(`${base}/courts`),
-      authFetch(`${base}/locations`),
-      authFetch(`${base}/teams`),
-      authFetch(`${base}/players`),
-      authFetch(`${base}/matches`)
+      apiFetch(`${base}/leagues`),
+      apiFetch(`${base}/courts`),
+      apiFetch(`${base}/locations`),
+      apiFetch(`${base}/teams`),
+      apiFetch(`${base}/players`),
+      apiFetch(`${base}/matches`)
     ]);
 
     // If all collection endpoints are missing, try the alternate namespace.
     if ([lRes, cRes, locRes, tRes, pRes, mRes].every((res) => res.status === 404)) {
       base = base === "/api/ops" ? "/api/admin" : "/api/ops";
       [lRes, cRes, locRes, tRes, pRes, mRes] = await Promise.all([
-        authFetch(`${base}/leagues`),
-        authFetch(`${base}/courts`),
-        authFetch(`${base}/locations`),
-        authFetch(`${base}/teams`),
-        authFetch(`${base}/players`),
-        authFetch(`${base}/matches`)
+        apiFetch(`${base}/leagues`),
+        apiFetch(`${base}/courts`),
+        apiFetch(`${base}/locations`),
+        apiFetch(`${base}/teams`),
+        apiFetch(`${base}/players`),
+        apiFetch(`${base}/matches`)
       ]);
       setAdminApiBase(base);
     }
 
     const statusSummary = `leagues=${lRes.status}, courts=${cRes.status}, locations=${locRes.status}, teams=${tRes.status}, players=${pRes.status}, matches=${mRes.status}`;
 
-    if ([lRes, cRes, locRes, tRes, pRes, mRes].some((res) => res.status === 401 || res.status === 403)) {
-      showWidgetMessage("global", `Signed in as admin, but one or more admin data endpoints were denied (${statusSummary}) via ${base}.`, true);
-      return;
-    }
-
     if (!lRes.ok || !cRes.ok || !locRes.ok || !tRes.ok || !pRes.ok || !mRes.ok) {
-      showWidgetMessage("global", `Signed in as admin, but failed to load admin data (${statusSummary}) via ${base}.`, true);
+      showWidgetMessage("global", `Failed to load admin data (${statusSummary}) via ${base}. Is the local admin server running?`, true);
       return;
     }
 
@@ -966,18 +802,6 @@ function AdminPage() {
     setTeams(loadedTeams);
     setPlayers(loadedPlayers);
     setMatches(loadedMatches);
-
-    try {
-      const diagRes = await authFetch(`${base}/diagnostics`);
-      if (diagRes.ok) {
-        const diag = await diagRes.json() as ApiDiagnostics;
-        setApiDiagnostics(diag);
-      } else {
-        setApiDiagnostics(null);
-      }
-    } catch {
-      setApiDiagnostics(null);
-    }
 
     const activeLoadedLeagues = loadedLeagues.filter((league) => league.isActive);
     const activeLoadedCourts = loadedCourts.filter((court) => court.isActive);
@@ -997,7 +821,7 @@ function AdminPage() {
     }));
 
     try {
-      const datesRes = await authFetch("/api/exports/dupr/dates");
+      const datesRes = await apiFetch("/api/exports/dupr/dates");
       if (datesRes.ok) {
         const dates: string[] = await datesRes.json();
         setMatchDates(dates);
@@ -1008,65 +832,25 @@ function AdminPage() {
     }
   }, [adminApiBase]);
 
-  const checkAuthorization = useCallback(async () => {
-    setAuthLoading(true);
+  const initialLoad = useCallback(async () => {
+    setLoadingAdminData(true);
     try {
-      const debug = await loadAuthDebug();
-
-      if (!debug.isAuthenticated) {
-        setIsAuthorized(false);
-        setAuthMessage("Please sign in with Microsoft Entra ID to access admin tools.");
-        await loadSignedInObjectId();
-      } else if (debug.isAdmin) {
-        setIsAuthorized(true);
-        setAuthMessage("");
-        if (debug.objectId) {
-          setEntraObjectId(debug.objectId);
-        } else if (debug.candidateIds?.length) {
-          setEntraObjectId(debug.candidateIds[0]);
-        } else {
-          await loadSignedInObjectId();
-        }
-        await loadAdminData();
-      } else {
-        setIsAuthorized(false);
-        setAuthMessage("Your account is signed in, but not approved for admin access.");
-        if (debug.objectId) {
-          setEntraObjectId(debug.objectId);
-        } else if (debug.candidateIds?.length) {
-          setEntraObjectId(debug.candidateIds[0]);
-        } else {
-          await loadSignedInObjectId();
-        }
-      }
+      await loadAdminData();
     } catch (error) {
-      setIsAuthorized(false);
-      setAuthMessage("Could not validate admin session. Try refreshing.");
-      showWidgetMessage("global", error instanceof Error ? error.message : "Failed to validate admin session.", true);
+      showWidgetMessage("global", error instanceof Error ? error.message : "Failed to load admin data.", true);
     } finally {
-      setAuthLoading(false);
+      setLoadingAdminData(false);
     }
-  }, [loadAdminData, loadAuthDebug, loadSignedInObjectId, showWidgetMessage]);
+  }, [loadAdminData, showWidgetMessage]);
 
   useEffect(() => {
-    checkAuthorization();
-  }, [checkAuthorization]);
-
-  const copyObjectId = async () => {
-    if (!entraObjectId) return;
-
-    try {
-      await navigator.clipboard.writeText(entraObjectId);
-      setCopyMessage("Object ID copied.");
-    } catch {
-      setCopyMessage("Unable to copy automatically. Please copy manually.");
-    }
-  };
+    initialLoad();
+  }, [initialLoad]);
 
   const onSavePlayer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const res = await authFetch(editingPlayerId ? `${adminApiBase}/players/${editingPlayerId}` : `${adminApiBase}/players`, {
+      const res = await apiFetch(editingPlayerId ? `${adminApiBase}/players/${editingPlayerId}` : `${adminApiBase}/players`, {
         method: editingPlayerId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(playerForm)
@@ -1084,7 +868,7 @@ function AdminPage() {
   const onSaveTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const res = await authFetch(editingTeamId ? `${adminApiBase}/teams/${editingTeamId}` : `${adminApiBase}/teams`, {
+      const res = await apiFetch(editingTeamId ? `${adminApiBase}/teams/${editingTeamId}` : `${adminApiBase}/teams`, {
         method: editingTeamId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(teamForm)
@@ -1112,7 +896,7 @@ function AdminPage() {
     }
 
     try {
-      const res = await authFetch(editingLeagueId ? `${adminApiBase}/leagues/${editingLeagueId}` : `${adminApiBase}/leagues`, {
+      const res = await apiFetch(editingLeagueId ? `${adminApiBase}/leagues/${editingLeagueId}` : `${adminApiBase}/leagues`, {
         method: editingLeagueId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(leagueForm)
@@ -1130,7 +914,7 @@ function AdminPage() {
   const onSaveCourt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const res = await authFetch(editingCourtId ? `${adminApiBase}/courts/${editingCourtId}` : `${adminApiBase}/courts`, {
+      const res = await apiFetch(editingCourtId ? `${adminApiBase}/courts/${editingCourtId}` : `${adminApiBase}/courts`, {
         method: editingCourtId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(courtForm)
@@ -1148,7 +932,7 @@ function AdminPage() {
   const onSaveLocation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const res = await authFetch(editingLocationId ? `${adminApiBase}/locations/${editingLocationId}` : `${adminApiBase}/locations`, {
+      const res = await apiFetch(editingLocationId ? `${adminApiBase}/locations/${editingLocationId}` : `${adminApiBase}/locations`, {
         method: editingLocationId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(locationForm)
@@ -1165,7 +949,7 @@ function AdminPage() {
 
   const saveLocation = async (location: Location, changes: Partial<LocationForm>, successMessage: string) => {
     try {
-      const res = await authFetch(`${adminApiBase}/locations/${location.id}`, {
+      const res = await apiFetch(`${adminApiBase}/locations/${location.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1197,7 +981,7 @@ function AdminPage() {
 
   const onTogglePlayerActive = async (player: Player) => {
     try {
-      const res = await authFetch(`${adminApiBase}/players/${player.id}`, {
+      const res = await apiFetch(`${adminApiBase}/players/${player.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1223,16 +1007,8 @@ function AdminPage() {
       isActive: !team.isActive
     };
 
-    setLastTeamToggleDebug({
-      timestamp: new Date().toISOString(),
-      endpoint,
-      teamId: team.id,
-      previousIsActive: team.isActive,
-      payload
-    });
-
     try {
-      const res = await authFetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1247,19 +1023,6 @@ function AdminPage() {
           parsed = null;
         }
       }
-
-      setLastTeamToggleDebug((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          response: {
-            status: res.status,
-            ok: res.ok,
-            rawBody: raw,
-            parsedBody: parsed
-          }
-        };
-      });
 
       if (!res.ok) {
         const parsedObject = typeof parsed === "object" && parsed !== null
@@ -1278,17 +1041,13 @@ function AdminPage() {
       await loadAdminData();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setLastTeamToggleDebug((prev) => {
-        if (!prev) return prev;
-        return { ...prev, error: message };
-      });
       showWidgetMessage("teams", `Error updating team status: ${message}`, true);
     }
   };
 
   const onToggleLeagueActive = async (league: League) => {
     try {
-      const res = await authFetch(`${adminApiBase}/leagues/${league.id}`, {
+      const res = await apiFetch(`${adminApiBase}/leagues/${league.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1308,7 +1067,7 @@ function AdminPage() {
 
   const onToggleCourtActive = async (court: Court) => {
     try {
-      const res = await authFetch(`${adminApiBase}/courts/${court.id}`, {
+      const res = await apiFetch(`${adminApiBase}/courts/${court.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1356,7 +1115,7 @@ function AdminPage() {
 
   const onDeleteMatch = async (matchId: string) => {
     try {
-      const res = await authFetch(`${adminApiBase}/matches/${matchId}`, { method: "DELETE" });
+      const res = await apiFetch(`${adminApiBase}/matches/${matchId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("failed");
       if (editingMatchId === matchId) {
         setEditingMatchId(null);
@@ -1442,16 +1201,7 @@ function AdminPage() {
         scoreB
       };
 
-      setLastMatchSubmitDebug({
-        timestamp: new Date().toISOString(),
-        phase: "requesting",
-        mode: wasEditing ? "update" : "create",
-        endpoint,
-        editingMatchId,
-        payload
-      });
-
-      const res = await authFetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: editingMatchId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1466,20 +1216,6 @@ function AdminPage() {
           parsed = null;
         }
       }
-
-      setLastMatchSubmitDebug((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          phase: "response",
-          response: {
-            status: res.status,
-            ok: res.ok,
-            rawBody: raw,
-            parsedBody: parsed
-          }
-        };
-      });
 
       if (!res.ok) {
         const parsedObject = typeof parsed === "object" && parsed !== null
@@ -1517,35 +1253,12 @@ function AdminPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const networkMessage = `Network error: ${msg}`;
-      setLastMatchSubmitDebug((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          phase: "network-error",
-          error: networkMessage
-        };
-      });
       setMatchError(networkMessage);
       setIsSavingMatch(false);
       return;
     }
     await loadAdminData().catch(() => {
-      setLastMatchSubmitDebug((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          phase: "refresh-failed",
-          error: "Saved, but list refresh failed."
-        };
-      });
       setMatchError("Saved, but list refresh failed.");
-    });
-    setLastMatchSubmitDebug((prev) => {
-      if (!prev || prev.phase === "refresh-failed") return prev;
-      return {
-        ...prev,
-        phase: "refresh-success"
-      };
     });
     setIsSavingMatch(false);
   };
@@ -1557,7 +1270,7 @@ function AdminPage() {
 
   const exportMatchesForDay = async () => {
     try {
-      const res = await authFetch(`/api/exports/dupr?date=${csvDate}`);
+      const res = await apiFetch(`/api/exports/dupr?date=${csvDate}`);
       if (!res.ok) {
         showWidgetMessage("export", "Export failed. No matches for that date, or server error.", true);
         return;
@@ -1575,39 +1288,12 @@ function AdminPage() {
     }
   };
 
-  if (authLoading) {
+  if (loadingAdminData) {
     return (
       <main className="app-shell">
         <section className="panel">
-          <h3>Checking Admin Access</h3>
-          <p>Validating your Microsoft Entra sign-in...</p>
-        </section>
-      </main>
-    );
-  }
-
-  if (!isAuthorized) {
-    return (
-      <main className="app-shell">
-        <section className="panel">
-          <h3>Admin Access Required</h3>
-          <p>{authMessage}</p>
-          <div className="admin-identity-box">
-            <h4>Who Am I</h4>
-            <p>Use this Entra Object ID in ADMIN_ENTRA_OBJECT_IDS to grant admin access.</p>
-            <div className="admin-identity-row">
-              <code>{entraObjectId || "Sign in to view your Entra Object ID"}</code>
-              <button type="button" onClick={copyObjectId} disabled={!entraObjectId}>
-                Copy ID
-              </button>
-            </div>
-            {copyMessage ? <p className="status-msg">{copyMessage}</p> : null}
-            {authDebug ? <pre className="auth-debug">{authDebug}</pre> : null}
-          </div>
-          <div className="admin-auth-links">
-            <a className="admin-link" href="/.auth/login/aad?post_login_redirect_uri=/admin">Sign in with Entra ID</a>
-            <a className="admin-link" href="/">Back to public stats</a>
-          </div>
+          <h3>Loading League Data</h3>
+          <p>Reading from the local admin server...</p>
         </section>
       </main>
     );
@@ -1630,7 +1316,6 @@ function AdminPage() {
         </p>
         <div className="admin-auth-links admin-auth-links-hero">
           <a className="admin-link" href="/">Public stats</a>
-          <a className="admin-link" href="/.auth/logout?post_logout_redirect_uri=/">Sign out</a>
         </div>
       </section>
 
@@ -1664,21 +1349,6 @@ function AdminPage() {
           <form className="match-form" onSubmit={onRecordMatch} noValidate>
             {matchError ? <p className="form-error" style={{fontSize: "1rem", padding: "0.75rem", marginBottom: "0.5rem"}}>{matchError}</p> : null}
             {matchSuccess ? <p className="status-msg" style={{fontSize: "1rem", padding: "0.75rem", marginBottom: "0.5rem", background: "#d4edda", border: "1px solid #28a745", borderRadius: "4px"}}>{matchSuccess}</p> : null}
-            {lastMatchSubmitDebug ? (
-              <details style={{ marginBottom: "0.75rem" }}>
-                <summary>Match Submit Debug (last attempt)</summary>
-                {apiDiagnostics ? (
-                  <p className="status-msg" style={{ marginTop: "0.5rem" }}>
-                    API diagnostics: {apiDiagnostics.version} ({apiDiagnostics.timestamp})
-                  </p>
-                ) : (
-                  <p className="status-msg" style={{ marginTop: "0.5rem" }}>
-                    API diagnostics unavailable.
-                  </p>
-                )}
-                <pre className="auth-debug" style={{ marginTop: "0.5rem" }}>{JSON.stringify(lastMatchSubmitDebug, null, 2)}</pre>
-              </details>
-            ) : null}
             <label>
               League
               <select value={matchForm.leagueId} onChange={(e) => setMatchForm((prev) => ({ ...prev, leagueId: e.target.value }))}>
@@ -2101,12 +1771,6 @@ git push`}</pre>
             <p>Add, activate/deactivate, or modify team records.</p>
           </div>
           {renderWidgetMessage("teams")}
-          {lastTeamToggleDebug ? (
-            <details style={{ marginBottom: "0.75rem" }}>
-              <summary>Team Toggle Debug (last attempt)</summary>
-              <pre className="auth-debug" style={{ marginTop: "0.5rem" }}>{JSON.stringify(lastTeamToggleDebug, null, 2)}</pre>
-            </details>
-          ) : null}
           <form className="match-form" onSubmit={onSaveTeam}>
             <label>
               Team Name

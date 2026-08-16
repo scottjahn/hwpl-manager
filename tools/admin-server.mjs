@@ -30,42 +30,10 @@ const escapeCell = (v) => {
 const toCsv = (header, rows) =>
   [header, ...rows].map((r) => r.map(escapeCell).join(',')).join('\n') + '\n';
 
-// ─── /.auth/me stub (Azure SWA compatibility) ────────────────────────────────
-// AdminPage calls this to display the signed-in Entra object ID; silently
-// falls back to "" on failure. Return a local placeholder so the debug panel
-// shows something useful.
-
-app.get('/.auth/me', (_req, res) => {
-  send(res, [
-    {
-      userId: 'local-admin',
-      userDetails: 'local-admin',
-      identityProvider: 'local',
-      userRoles: ['authenticated', 'hwpl-admin'],
-      claims: [{ typ: 'oid', val: 'local-admin' }],
-    },
-  ]);
-});
-
-// ─── auth stubs ──────────────────────────────────────────────────────────────
+// ─── service info ────────────────────────────────────────────────────────────
 
 app.get('/api/health', (_req, res) => {
   send(res, { ok: true, service: 'hwpl-local-admin' });
-});
-
-app.get('/api/debug/auth', (_req, res) => {
-  send(res, {
-    isAuthenticated: true,
-    isAdmin: true,
-    objectId: 'local-admin',
-    candidateIds: ['local-admin'],
-    principalName: 'local-admin',
-    roles: ['hwpl-admin'],
-  });
-});
-
-app.get('/api/ops/me', (_req, res) => {
-  send(res, { isAdmin: true, objectId: 'local-admin', candidateIds: ['local-admin'] });
 });
 
 app.get('/api/ops/diagnostics', (_req, res) => {
