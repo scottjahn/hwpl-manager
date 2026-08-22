@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicMatch, RecentMatch, SessionCourtEntry, StatsRow } from "./types";
-import { statsUrl, sessionUrl } from "./dataSource";
+import { statsUrl, sessionUrl, fetchStats } from "./dataSource";
 import { stripBase, withBase } from "./basePath";
 
 interface StatAccumulator {
@@ -1022,11 +1022,11 @@ function App() {
 
   const loadStats = useCallback(async () => {
     const [psRes, tsRes, rmRes, sdRes, pmRes] = await Promise.all([
-      fetch(statsUrl("players")),
-      fetch(statsUrl("teams")),
-      fetch(statsUrl("matches")),
-      fetch(statsUrl("session-dates")),
-      fetch(statsUrl("matches-full"))
+      fetchStats(statsUrl("players")),
+      fetchStats(statsUrl("teams")),
+      fetchStats(statsUrl("matches")),
+      fetchStats(statsUrl("session-dates")),
+      fetchStats(statsUrl("matches-full"))
     ]);
 
     if (!psRes.ok || !tsRes.ok || !rmRes.ok || !sdRes.ok || !pmRes.ok) {
@@ -1060,7 +1060,7 @@ function App() {
   useEffect(() => {
     if (!selectedDate) return;
     setSessionLoading(true);
-    fetch(sessionUrl(selectedDate))
+    fetchStats(sessionUrl(selectedDate))
       .then((response) => (response.ok ? response.json() as Promise<SessionCourtEntry[]> : Promise.reject()))
       .then((data) => setSessionData(data))
       .catch(() => setSessionData([]))
