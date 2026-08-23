@@ -387,6 +387,98 @@ button:hover {
   color: var(--ink-soft);
 }
 
+.assign-selection-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 6px 18px rgba(16, 32, 48, 0.12);
+}
+
+.assign-selection-bar button {
+  padding: 0.42rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.assign-selection-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.assign-selection-bar button:disabled:hover {
+  transform: none;
+  filter: none;
+}
+
+.assign-selection-count {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--brand-dark);
+  margin-right: 0.2rem;
+}
+
+.assign-selection-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.assign-selection-target select {
+  padding: 0.38rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.assign-selection-bar .primary {
+  background: linear-gradient(135deg, #f0d030 0%, #c6a31b 100%);
+  color: #102030;
+  font-weight: 700;
+}
+
+.assign-court-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.assign-here-btn {
+  padding: 0.36rem 0.6rem;
+  font-size: 0.78rem;
+  flex: 0 0 auto;
+}
+
+.assign-here-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.assign-here-btn:disabled:hover {
+  transform: none;
+  filter: none;
+}
+
+/* Keep the unassigned pool visible while scrolling through the court list. */
+@media (min-width: 981px) {
+  .assign-dnd-layout > .assign-court-card {
+    position: sticky;
+    top: 4.2rem;
+    align-self: start;
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+  }
+}
+
 .assign-courts-column {
   display: grid;
   gap: 0.8rem;
@@ -450,6 +542,13 @@ button:hover {
 .team-chip small {
   color: var(--ink-soft);
   font-size: 0.72rem;
+}
+
+.team-chip.selected {
+  background: linear-gradient(135deg, #f0d030 0%, #c6a31b 100%);
+  border-color: #a88712;
+  color: #102030;
+  font-weight: 700;
 }
 
 .team-chip:active {

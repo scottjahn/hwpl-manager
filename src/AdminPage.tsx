@@ -290,6 +290,8 @@ function AdminPage() {
   const [teamToCourtId, setTeamToCourtId] = useState<Record<string, string>>({});
   const [gamesPerCourt, setGamesPerCourt] = useState<Record<string, number>>({});
   const [draggedTeamId, setDraggedTeamId] = useState<string | null>(null);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [assignTargetCourtId, setAssignTargetCourtId] = useState("");
 
   // Guards the save effect from firing during the initial mount renders (before
   // data has loaded and localStorage has been restored). Set to true in the
@@ -401,6 +403,13 @@ function AdminPage() {
       });
       return next;
     });
+
+    setSelectedTeamIds((prev) => {
+      const next = prev.filter((teamId) => activeTeamIds.has(teamId));
+      return next.length === prev.length ? prev : next;
+    });
+
+    setAssignTargetCourtId((prev) => (prev && !activeCourtIds.has(prev) ? "" : prev));
   }, [activeCourts, activeTeams]);
 
   useEffect(() => {
@@ -542,14 +551,59 @@ function AdminPage() {
     [orderedActiveTeams, teamToCourtId]
   );
 
-  const onAssignTeamToCourt = (teamId: string, courtId: string) => {
+  const selectedTeamIdSet = useMemo(() => new Set(selectedTeamIds), [selectedTeamIds]);
+
+  const courtNameById = useMemo(
+    () => new Map(courts.map((court) => [court.id, court.name])),
+    [courts]
+  );
+
+  // Single write path for both drag-and-drop and the select-then-assign toolbar.
+  // An empty courtId means "back to Unassigned".
+  const assignTeamsToCourt = (teamIds: string[], courtId: string) => {
+    if (teamIds.length === 0) return;
     setTeamToCourtId((prev) => {
-      if (!courtId) {
-        const { [teamId]: _removed, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [teamId]: courtId };
+      const next = { ...prev };
+      teamIds.forEach((teamId) => {
+        if (courtId) {
+          next[teamId] = courtId;
+        } else {
+          delete next[teamId];
+        }
+      });
+      return next;
     });
+  };
+
+  const onAssignTeamToCourt = (teamId: string, courtId: string) => {
+    assignTeamsToCourt([teamId], courtId);
+  };
+
+  const onToggleTeamSelected = (teamId: string) => {
+    setSelectedTeamIds((prev) =>
+      prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId]
+    );
+  };
+
+  const onSelectAllUnassigned = () => {
+    setSelectedTeamIds(unassignedTeams.map((team) => team.id));
+  };
+
+  const onClearSelection = () => {
+    setSelectedTeamIds([]);
+  };
+
+  const onAssignSelectedToCourt = (courtId: string) => {
+    if (selectedTeamIds.length === 0) {
+      showWidgetMessage("assign-courts", "Select one or more teams first.", true);
+      return;
+    }
+
+    const count = selectedTeamIds.length;
+    const destination = courtId ? courtNameById.get(courtId) ?? "the court" : "Unassigned";
+    assignTeamsToCourt(selectedTeamIds, courtId);
+    setSelectedTeamIds([]);
+    showWidgetMessage("assign-courts", `Moved ${count} team(s) to ${destination}.`);
   };
 
   const onChangeGamesPerCourt = (courtId: string, rawValue: string) => {
@@ -560,6 +614,7 @@ function AdminPage() {
 
   const onClearAllAssignments = () => {
     setTeamToCourtId({});
+    setSelectedTeamIds([]);
     showWidgetMessage("assign-courts", "All court assignments were cleared.");
   };
 
@@ -577,20 +632,27 @@ function AdminPage() {
     event.preventDefault();
   };
 
-  const onDropTeamToCourt = (event: DragEvent<HTMLElement>, courtId: string) => {
+  // Dragging a chip that is part of the current selection moves the whole
+  // selection; dragging an unselected chip moves just that team.
+  const handleTeamDrop = (event: DragEvent<HTMLElement>, courtId: string) => {
     event.preventDefault();
     const droppedTeamId = event.dataTransfer.getData("text/team-id") || draggedTeamId;
     if (!droppedTeamId) return;
-    onAssignTeamToCourt(droppedTeamId, courtId);
+
+    if (selectedTeamIdSet.has(droppedTeamId)) {
+      onAssignSelectedToCourt(courtId);
+    } else {
+      onAssignTeamToCourt(droppedTeamId, courtId);
+    }
     setDraggedTeamId(null);
   };
 
+  const onDropTeamToCourt = (event: DragEvent<HTMLElement>, courtId: string) => {
+    handleTeamDrop(event, courtId);
+  };
+
   const onDropTeamToUnassigned = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    const droppedTeamId = event.dataTransfer.getData("text/team-id") || draggedTeamId;
-    if (!droppedTeamId) return;
-    onAssignTeamToCourt(droppedTeamId, "");
-    setDraggedTeamId(null);
+    handleTeamDrop(event, "");
   };
 
   const openRoundRobinPrintWindow = (court: Court) => {
@@ -2011,7 +2073,7 @@ git push`}</pre>
         <article className="panel">
           <div className="panel-header">
             <h3>Team Court Assignments</h3>
-            <p>Drag teams from the list onto a court, or drop on Unassigned to remove placement.</p>
+            <p>Click teams to select them, then pick a court below — or drag chips between cards.</p>
           </div>
           {renderWidgetMessage("assign-courts")}
           <div className="assign-courts-toolbar">
@@ -2020,6 +2082,47 @@ git push`}</pre>
             </p>
             <button type="button" onClick={onClearAllAssignments}>
               Clear All Assignments
+            </button>
+          </div>
+
+          <div className="assign-selection-bar">
+            <span className="assign-selection-count">
+              {selectedTeamIds.length} team{selectedTeamIds.length === 1 ? "" : "s"} selected
+            </span>
+            <label className="assign-selection-target">
+              Assign to
+              <select
+                value={assignTargetCourtId}
+                onChange={(event) => setAssignTargetCourtId(event.target.value)}
+              >
+                <option value="">Choose a court...</option>
+                {orderedActiveCourts.map((court) => (
+                  <option key={court.id} value={court.id}>
+                    {court.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="primary"
+              disabled={selectedTeamIds.length === 0 || !assignTargetCourtId}
+              onClick={() => onAssignSelectedToCourt(assignTargetCourtId)}
+            >
+              Assign Selected
+            </button>
+            <button
+              type="button"
+              disabled={selectedTeamIds.length === 0}
+              onClick={() => onAssignSelectedToCourt("")}
+            >
+              Unassign Selected
+            </button>
+            <button type="button" onClick={onSelectAllUnassigned} disabled={unassignedTeams.length === 0}>
+              Select All Unassigned
+            </button>
+            <button type="button" onClick={onClearSelection} disabled={selectedTeamIds.length === 0}>
+              Clear Selection
             </button>
           </div>
 
@@ -2041,8 +2144,10 @@ git push`}</pre>
                     <button
                       key={team.id}
                       type="button"
-                      className="team-chip"
+                      className={selectedTeamIdSet.has(team.id) ? "team-chip selected" : "team-chip"}
+                      aria-pressed={selectedTeamIdSet.has(team.id)}
                       draggable
+                      onClick={() => onToggleTeamSelected(team.id)}
                       onDragStart={(event) => onTeamDragStart(event, team.id)}
                       onDragEnd={onTeamDragEnd}
                     >
@@ -2066,9 +2171,19 @@ git push`}</pre>
                       onDragOver={onAllowDrop}
                       onDrop={(event) => onDropTeamToCourt(event, court.id)}
                     >
-                      <header>
-                        <h4>{court.name}</h4>
-                        <p>{assignedTeams.length} assigned team(s)</p>
+                      <header className="assign-court-header">
+                        <div>
+                          <h4>{court.name}</h4>
+                          <p>{assignedTeams.length} assigned team(s)</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="assign-here-btn"
+                          disabled={selectedTeamIds.length === 0}
+                          onClick={() => onAssignSelectedToCourt(court.id)}
+                        >
+                          Assign Selected ({selectedTeamIds.length})
+                        </button>
                       </header>
 
                       <label>
@@ -2090,8 +2205,10 @@ git push`}</pre>
                             <button
                               key={team.id}
                               type="button"
-                              className="team-chip"
+                              className={selectedTeamIdSet.has(team.id) ? "team-chip selected" : "team-chip"}
+                              aria-pressed={selectedTeamIdSet.has(team.id)}
                               draggable
+                              onClick={() => onToggleTeamSelected(team.id)}
                               onDragStart={(event) => onTeamDragStart(event, team.id)}
                               onDragEnd={onTeamDragEnd}
                             >
