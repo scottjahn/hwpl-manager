@@ -49,6 +49,11 @@ function migrate(d) {
     d.exec(`ALTER TABLE matches ADD COLUMN location_id TEXT REFERENCES locations(id)`);
   }
 
+  const leagueColumns = d.prepare(`PRAGMA table_info(leagues)`).all().map((c) => c.name);
+  if (!leagueColumns.includes('message_html')) {
+    d.exec(`ALTER TABLE leagues ADD COLUMN message_html TEXT NOT NULL DEFAULT ''`);
+  }
+
   if (d.prepare(`SELECT COUNT(*) AS n FROM locations`).get().n === 0) {
     d.prepare(
       `INSERT INTO locations (id, name, address, is_default, is_active) VALUES (?, ?, ?, 1, 1)`
@@ -76,10 +81,11 @@ export function defaultLocationId(d = getDb()) {
  */
 export function loadRaw(d = getDb()) {
   const leagues = d.prepare(
-    `SELECT id, name, start_date, end_date, is_active FROM leagues`
+    `SELECT id, name, start_date, end_date, is_active, message_html FROM leagues`
   ).all().map((r) => ({
     id: r.id, name: r.name, startDate: r.start_date,
     endDate: r.end_date, isActive: bool(r.is_active),
+    messageHtml: r.message_html ?? '',
   }));
 
   const teams = d.prepare(

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PublicMatch, RecentMatch, SessionCourtEntry, StatsRow } from "./types";
-import { statsUrl, sessionUrl, fetchStats } from "./dataSource";
+import { LeagueStatRow, PublicMatch, SessionCourtEntry, StatsRow } from "./types";
+import { statsUrl, fetchStats } from "./dataSource";
 import { stripBase, withBase } from "./basePath";
 
 interface StatAccumulator {
@@ -50,21 +50,31 @@ const addGame = (acc: StatAccumulator, pointsFor: number, pointsAgainst: number)
   acc.pointsAgainst += pointsAgainst;
 };
 
-const toStatsRow = (id: string, name: string, acc: StatAccumulator): StatsRow => {
-  const differential = acc.pointsFor - acc.pointsAgainst;
-  const winRate = acc.gamesPlayed === 0 ? 0 : acc.wins / acc.gamesPlayed;
-  return {
-    id,
-    name,
-    gamesPlayed: acc.gamesPlayed,
-    wins: acc.wins,
-    losses: acc.losses,
-    pointsFor: acc.pointsFor,
-    pointsAgainst: acc.pointsAgainst,
-    differential,
-    winRate
-  };
-};
+const statBody = (acc: StatAccumulator) => ({
+  gamesPlayed: acc.gamesPlayed,
+  wins: acc.wins,
+  losses: acc.losses,
+  pointsFor: acc.pointsFor,
+  pointsAgainst: acc.pointsAgainst,
+  differential: acc.pointsFor - acc.pointsAgainst,
+  winRate: acc.gamesPlayed === 0 ? 0 : acc.wins / acc.gamesPlayed
+});
+
+const toStatsRow = (id: string, name: string, acc: StatAccumulator): StatsRow => ({
+  id,
+  name,
+  ...statBody(acc)
+});
+
+/** Picker value for the cross-league view. Never a real league id. */
+const ALL_LEAGUES = "__all__";
+
+// "ORDER BY wins DESC, winRate DESC, differential DESC" — the standings order
+// carried over from the original SQL.
+const byWinsDesc = (a: { wins: number; winRate: number; differential: number },
+                    b: { wins: number; winRate: number; differential: number }) => (
+  b.wins - a.wins || b.winRate - a.winRate || b.differential - a.differential
+);
 
 const byGamesPlayedDesc = (a: StatsRow, b: StatsRow) => (
   b.gamesPlayed - a.gamesPlayed
@@ -1008,45 +1018,35 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const [playerStats, setPlayerStats] = useState<StatsRow[]>([]);
-  const [teamStats, setTeamStats] = useState<StatsRow[]>([]);
-  const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [publicMatches, setPublicMatches] = useState<PublicMatch[]>([]);
+  const [leagues, setLeagues] = useState<LeagueStatRow[]>([]);
 
-  const [sessionDates, setSessionDates] = useState<string[]>([]);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [sessionData, setSessionData] = useState<SessionCourtEntry[]>([]);
-  const [sessionLoading, setSessionLoading] = useState(false);
 
   const [teamCourtFilter, setTeamCourtFilter] = useState<string>("");
 
+  // Everything on this page is derived from the full match list, so a league
+  // filter is a plain array filter rather than another round of fetches. The
+  // pre-computed players/teams/session tables are league-wide by construction
+  // and would ignore the picker.
   const loadStats = useCallback(async () => {
-    const [psRes, tsRes, rmRes, sdRes, pmRes] = await Promise.all([
-      fetchStats(statsUrl("players")),
-      fetchStats(statsUrl("teams")),
-      fetchStats(statsUrl("matches")),
-      fetchStats(statsUrl("session-dates")),
-      fetchStats(statsUrl("matches-full"))
+    const [pmRes, lgRes] = await Promise.all([
+      fetchStats(statsUrl("matches-full")),
+      fetchStats(statsUrl("leagues"))
     ]);
 
-    if (!psRes.ok || !tsRes.ok || !rmRes.ok || !sdRes.ok || !pmRes.ok) {
+    if (!pmRes.ok || !lgRes.ok) {
       throw new Error("Failed to load stats");
     }
 
-    const [ps, ts, rm, sd, pm] = await Promise.all([
-      psRes.json() as Promise<StatsRow[]>,
-      tsRes.json() as Promise<StatsRow[]>,
-      rmRes.json() as Promise<RecentMatch[]>,
-      sdRes.json() as Promise<string[]>,
-      pmRes.json() as Promise<PublicMatch[]>
+    const [pm, lg] = await Promise.all([
+      pmRes.json() as Promise<PublicMatch[]>,
+      lgRes.json() as Promise<LeagueStatRow[]>
     ]);
 
-    setPlayerStats(ps);
-    setTeamStats(ts);
-    setRecentMatches(rm);
-    setSessionDates(sd);
     setPublicMatches(pm);
-    if (sd.length > 0) setSelectedDate(sd[0]);
+    setLeagues(lg);
   }, []);
 
   useEffect(() => {
@@ -1057,84 +1057,207 @@ function App() {
       .finally(() => setLoading(false));
   }, [loadStats]);
 
+  // Newest start date first. leagues.json already arrives in this order; the
+  // sort keeps the picker correct if that ever changes.
+  const leagueOptions = useMemo(
+    () => [...leagues].sort(
+      (a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name)
+    ),
+    [leagues]
+  );
+
+  // Default to the newest league once the list arrives. An explicit All
+  // selection survives a refresh; anything else falls back to the newest.
   useEffect(() => {
-    if (!selectedDate) return;
-    setSessionLoading(true);
-    fetchStats(sessionUrl(selectedDate))
-      .then((response) => (response.ok ? response.json() as Promise<SessionCourtEntry[]> : Promise.reject()))
-      .then((data) => setSessionData(data))
-      .catch(() => setSessionData([]))
-      .finally(() => setSessionLoading(false));
-  }, [selectedDate]);
+    if (leagueOptions.length === 0) return;
+    setSelectedLeagueId((prev) =>
+      prev === ALL_LEAGUES || leagueOptions.some((l) => l.id === prev)
+        ? prev
+        : leagueOptions[0].id
+    );
+  }, [leagueOptions]);
+
+  // Null for All Leagues — there is no single league message to show.
+  const selectedLeague = useMemo(
+    () => leagueOptions.find((l) => l.id === selectedLeagueId) ?? null,
+    [leagueOptions, selectedLeagueId]
+  );
+
+  // The slice of matches every stat on this page is built from. Empty until a
+  // selection exists, so the first paint never shows unfiltered totals.
+  const leagueMatches = useMemo(() => {
+    if (selectedLeagueId === ALL_LEAGUES) return publicMatches;
+    if (!selectedLeagueId) return [];
+    return publicMatches.filter((m) => m.leagueId === selectedLeagueId);
+  }, [publicMatches, selectedLeagueId]);
+
+  const playerStats = useMemo(() => {
+    const accs = new Map<string, { name: string; acc: StatAccumulator }>();
+    for (const m of leagueMatches) {
+      for (const part of m.participants) {
+        const entry = accs.get(part.playerId)
+          ?? { name: part.playerName, acc: createAccumulator() };
+        addGame(
+          entry.acc,
+          part.teamSide === "A" ? m.scoreA : m.scoreB,
+          part.teamSide === "A" ? m.scoreB : m.scoreA
+        );
+        accs.set(part.playerId, entry);
+      }
+    }
+    return [...accs.entries()]
+      .map(([id, entry]) => toStatsRow(id, entry.name, entry.acc))
+      .sort(byWinsDesc);
+  }, [leagueMatches]);
+
+  const teamStats = useMemo(() => {
+    const accs = new Map<string, { name: string; acc: StatAccumulator }>();
+    for (const m of leagueMatches) {
+      if (m.gameType !== "Doubles" || !m.teamAId || !m.teamBId) continue;
+      const bump = (id: string, name: string, pf: number, pa: number) => {
+        const entry = accs.get(id) ?? { name, acc: createAccumulator() };
+        addGame(entry.acc, pf, pa);
+        accs.set(id, entry);
+      };
+      bump(m.teamAId, m.teamAName, m.scoreA, m.scoreB);
+      bump(m.teamBId, m.teamBName, m.scoreB, m.scoreA);
+    }
+    return [...accs.entries()]
+      .map(([id, entry]) => toStatsRow(id, entry.name, entry.acc))
+      .sort(byWinsDesc);
+  }, [leagueMatches]);
+
+  const sessionDates = useMemo(
+    () => [...new Set(leagueMatches.map((m) => m.date))].sort((a, b) => b.localeCompare(a)),
+    [leagueMatches]
+  );
+
+  // Keep the session picker on a date the selected league actually played.
+  useEffect(() => {
+    setSelectedDate((prev) => (prev && sessionDates.includes(prev) ? prev : sessionDates[0] ?? ""));
+  }, [sessionDates]);
+
+  // Per-court team (Doubles) and player (Ladder) stats for the selected date.
+  // Only matches with a court assigned are counted.
+  const sessionData = useMemo<SessionCourtEntry[]>(() => {
+    if (!selectedDate) return [];
+    const courts = new Map<string, {
+      courtName: string;
+      doubles: Map<string, { name: string; acc: StatAccumulator }>;
+      ladder: Map<string, { name: string; acc: StatAccumulator }>;
+    }>();
+    const ensure = (courtId: string, courtName: string) => {
+      const existing = courts.get(courtId);
+      if (existing) return existing;
+      const created = { courtName, doubles: new Map(), ladder: new Map() };
+      courts.set(courtId, created);
+      return created;
+    };
+
+    for (const m of leagueMatches) {
+      if (m.date !== selectedDate || !m.courtId) continue;
+
+      if (m.gameType === "Doubles" && m.teamAId && m.teamBId) {
+        const court = ensure(m.courtId, m.courtName);
+        const bump = (id: string, name: string, pf: number, pa: number) => {
+          const entry = court.doubles.get(id) ?? { name, acc: createAccumulator() };
+          addGame(entry.acc, pf, pa);
+          court.doubles.set(id, entry);
+        };
+        bump(m.teamAId, m.teamAName, m.scoreA, m.scoreB);
+        bump(m.teamBId, m.teamBName, m.scoreB, m.scoreA);
+      } else if (m.gameType === "Ladder") {
+        const court = ensure(m.courtId, m.courtName);
+        for (const part of m.participants) {
+          const entry = court.ladder.get(part.playerId)
+            ?? { name: part.playerName, acc: createAccumulator() };
+          addGame(
+            entry.acc,
+            part.teamSide === "A" ? m.scoreA : m.scoreB,
+            part.teamSide === "A" ? m.scoreB : m.scoreA
+          );
+          court.ladder.set(part.playerId, entry);
+        }
+      }
+    }
+
+    return [...courts.entries()]
+      .map(([courtId, court]) => ({
+        courtId,
+        courtName: court.courtName,
+        doubles: [...court.doubles.entries()]
+          .map(([teamId, e]) => ({ teamId, teamName: e.name, ...statBody(e.acc) }))
+          .sort(byWinsDesc),
+        ladder: [...court.ladder.entries()]
+          .map(([playerId, e]) => ({ playerId, playerName: e.name, ...statBody(e.acc) }))
+          .sort(byWinsDesc)
+      }))
+      .sort((a, b) => a.courtName.localeCompare(b.courtName));
+  }, [leagueMatches, selectedDate]);
+
+  // leagueMatches keeps the export order: match date DESC, then entry order.
+  const recentMatches = useMemo(() => leagueMatches.slice(0, 10), [leagueMatches]);
 
   const totalPlayers = playerStats.length;
   const totalTeams = teamStats.length;
   const totalSessions = sessionDates.length;
 
+  // Name lookups span every league — the team and player detail pages they feed
+  // are deliberately not filtered by the picker.
   const teamNameById = useMemo(() => {
-    const map = new Map<string, string>(teamStats.map((team) => [team.id, team.name]));
+    const map = new Map<string, string>();
     for (const match of publicMatches) {
       if (match.teamAId) map.set(match.teamAId, match.teamAName);
       if (match.teamBId) map.set(match.teamBId, match.teamBName);
     }
     return map;
-  }, [publicMatches, teamStats]);
+  }, [publicMatches]);
 
   const playerNameById = useMemo(() => {
-    const map = new Map<string, string>(playerStats.map((player) => [player.id, player.name]));
+    const map = new Map<string, string>();
     for (const match of publicMatches) {
       for (const participant of match.participants) {
         map.set(participant.playerId, participant.playerName);
       }
     }
     return map;
-  }, [playerStats, publicMatches]);
+  }, [publicMatches]);
 
-  // Courts that appear in at least one match, sorted alphabetically.
+  // Courts that appear in at least one match of the selected league.
   const courtOptions = useMemo(() => {
     const courts = new Map<string, string>(); // id → name
-    for (const m of publicMatches) {
+    for (const m of leagueMatches) {
       if (m.courtId && m.courtName) courts.set(m.courtId, m.courtName);
     }
     return [...courts.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [publicMatches]);
+  }, [leagueMatches]);
 
-  // Team stats re-computed from publicMatches when a court filter is active.
+  // Drop the court filter when it names a court the selected league never used.
+  useEffect(() => {
+    setTeamCourtFilter((prev) => (prev && courtOptions.some((c) => c.id === prev) ? prev : ""));
+  }, [courtOptions]);
+
+  // Team stats re-computed when a court filter is active.
   const filteredTeamStats = useMemo(() => {
     if (!teamCourtFilter) return teamStats;
-    const accs = new Map<string, { gp: number; wins: number; pf: number; pa: number }>();
-    for (const m of publicMatches) {
+    const accs = new Map<string, { name: string; acc: StatAccumulator }>();
+    for (const m of leagueMatches) {
       if (m.gameType !== "Doubles" || !m.teamAId || !m.teamBId) continue;
       if (m.courtId !== teamCourtFilter) continue;
-      const add = (id: string, pf: number, pa: number) => {
-        const a = accs.get(id) ?? { gp: 0, wins: 0, pf: 0, pa: 0 };
-        a.gp += 1; if (pf > pa) a.wins += 1; a.pf += pf; a.pa += pa;
-        accs.set(id, a);
+      const bump = (id: string, name: string, pf: number, pa: number) => {
+        const entry = accs.get(id) ?? { name, acc: createAccumulator() };
+        addGame(entry.acc, pf, pa);
+        accs.set(id, entry);
       };
-      add(m.teamAId, m.scoreA, m.scoreB);
-      add(m.teamBId, m.scoreB, m.scoreA);
+      bump(m.teamAId, m.teamAName, m.scoreA, m.scoreB);
+      bump(m.teamBId, m.teamBName, m.scoreB, m.scoreA);
     }
     return [...accs.entries()]
-      .map(([id, a]) => ({
-        id,
-        name: teamNameById.get(id) ?? "Unknown Team",
-        gamesPlayed: a.gp,
-        wins: a.wins,
-        losses: a.gp - a.wins,
-        pointsFor: a.pf,
-        pointsAgainst: a.pa,
-        differential: a.pf - a.pa,
-        winRate: a.gp === 0 ? 0 : a.wins / a.gp,
-      }))
-      .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.differential - a.differential);
-  }, [teamCourtFilter, publicMatches, teamStats, teamNameById]);
-
-  const teamIdByName = useMemo(
-    () => new Map<string, string>(teamStats.map((team) => [team.name, team.id])),
-    [teamStats]
-  );
+      .map(([id, entry]) => toStatsRow(id, entry.name, entry.acc))
+      .sort(byWinsDesc);
+  }, [teamCourtFilter, leagueMatches, teamStats]);
 
   // Refresh slug maps from the current data on every render. Both inputs are
   // Maps derived via useMemo so this is a pure derivation, not a side-effect.
@@ -1154,8 +1277,6 @@ function App() {
   // any bookmarks that pre-date this change).
   const teamRouteId = teamRouteSlug ? (gTeamBySlug.get(teamRouteSlug) ?? "") : "";
   const playerRouteId = playerRouteSlug ? (gPlayerBySlug.get(playerRouteSlug) ?? "") : "";
-  const showLoadingOverlay = loading || sessionLoading;
-
   return (
     <main className="app-shell">
       {teamRouteId ? (
@@ -1183,6 +1304,32 @@ function App() {
               </div>
             </div>
             <p>View live league, team, player, and recent match statistics. Click any team or player name for detail pages.</p>
+
+            {leagueOptions.length > 0 ? (
+              <div className="league-picker">
+                <label htmlFor="league-select">League</label>
+                <select
+                  id="league-select"
+                  className="league-picker-select"
+                  value={selectedLeagueId}
+                  onChange={(event) => setSelectedLeagueId(event.target.value)}
+                >
+                  <option value={ALL_LEAGUES}>All Leagues</option>
+                  {leagueOptions.map((league) => (
+                    <option key={league.id} value={league.id}>{league.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {selectedLeague?.messageHtml?.trim() ? (
+              // Authored by the league admin in the local admin panel — not
+              // user input, and baked into the static snapshot at export time.
+              <div
+                className="league-message"
+                dangerouslySetInnerHTML={{ __html: selectedLeague.messageHtml }}
+              />
+            ) : null}
 
             {apiError ? <p className="panel status-msg" style={{ color: "#9a2f2f" }}>{apiError}</p> : null}
 
@@ -1306,9 +1453,7 @@ function App() {
                     ))}
                   </select>
                 </div>
-                {sessionLoading ? (
-                  <p>Loading session data...</p>
-                ) : sessionData.length === 0 ? (
+                {sessionData.length === 0 ? (
                   <p>No match data for this date.</p>
                 ) : (
                   sessionData.map((court) => (
@@ -1408,12 +1553,12 @@ function App() {
                 <li key={match.id}>
                   <span>{match.date}</span>
                   <strong>
-                    <TeamLink id={teamIdByName.get(match.teamA) ?? null} name={match.teamA} />
+                    <TeamLink id={match.teamAId} name={match.teamAName} />
                   </strong>
                   <em>{match.scoreA}</em>
                   <em>{match.scoreB}</em>
                   <strong>
-                    <TeamLink id={teamIdByName.get(match.teamB) ?? null} name={match.teamB} />
+                    <TeamLink id={match.teamBId} name={match.teamBName} />
                   </strong>
                 </li>
               ))}
@@ -1434,7 +1579,7 @@ function App() {
         </>
       )}
 
-      {showLoadingOverlay ? (
+      {loading ? (
         <div className="loading-overlay" role="status" aria-live="polite" aria-busy="true">
           <div className="loading-overlay-card">
             <div className="loading-spinner" />

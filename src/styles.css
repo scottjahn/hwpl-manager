@@ -84,6 +84,58 @@ body {
   color: #d6fff8;
 }
 
+/* League picker + optional per-league announcement, inside the dark hero. */
+.league-picker {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.league-picker label {
+  display: inline;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #d6fff8;
+}
+
+.league-picker-select {
+  width: auto;
+  max-width: 100%;
+  min-width: 220px;
+}
+
+.league-message {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(3px);
+  color: #f4fffd;
+  font-size: 0.92rem;
+}
+
+/* .hero p zeroes paragraph margins; restore them inside the message body. */
+.league-message p,
+.league-message ul,
+.league-message ol {
+  margin: 0.5rem 0;
+}
+
+.league-message > *:first-child {
+  margin-top: 0;
+}
+
+.league-message > *:last-child {
+  margin-bottom: 0;
+}
+
+.league-message a {
+  color: var(--logo-accent);
+}
+
 .hero-metrics {
   margin-top: 1.2rem;
   display: grid;
@@ -199,6 +251,7 @@ label {
 
 input,
 select,
+textarea,
 button {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -206,11 +259,45 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 0.52rem 0.56rem;
   background: rgba(255, 255, 255, 0.95);
   color: var(--ink);
+}
+
+/* Raw-HTML editor in the admin panel's Manage Leagues widget. */
+.html-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.html-preview {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.75rem;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.html-preview-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 0.4rem;
+}
+
+.html-preview > div > *:first-child {
+  margin-top: 0;
+}
+
+.html-preview > div > *:last-child {
+  margin-bottom: 0;
 }
 
 .teams-grid,
@@ -823,7 +910,8 @@ button:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .session-picker {
+  .session-picker,
+  .league-picker {
     flex-wrap: wrap;
   }
 
@@ -865,7 +953,8 @@ button:hover {
     height: 60px;
   }
 
-  .session-picker-select {
+  .session-picker-select,
+  .league-picker-select {
     width: 100%;
     min-width: 0;
   }

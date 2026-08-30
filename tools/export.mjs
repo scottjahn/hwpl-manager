@@ -22,21 +22,15 @@ const write = (relPath, data) => {
 const raw = loadRaw();
 const all = computeAll(raw);
 
-// Start clean so deleted sessions/dates don't linger as stale files.
+// Start clean so files from an earlier export don't linger as stale.
 rmSync(OUT, { recursive: true, force: true });
 
-write('players.json', all.players);
-write('teams.json', all.teams);
-write('matches.json', all.matches);
+// The public site derives every table (players, teams, sessions, recent
+// matches) in the browser from these two files, so they are all it needs.
 write('matches-full.json', all.matchesFull);
 write('leagues.json', all.leagues);
-write('session-dates.json', all.sessionDates);
-for (const [date, session] of Object.entries(all.sessions)) {
-  write(join('session', `${date}.json`), session);
-}
 
 console.log(
   `Exported -> ${OUT}\n` +
-  `  ${all.players.length} players, ${all.teams.length} teams, ` +
-  `${all.matchesFull.length} matches, ${all.sessionDates.length} session date(s)`
+  `  ${all.matchesFull.length} matches across ${all.leagues.length} league(s)`
 );

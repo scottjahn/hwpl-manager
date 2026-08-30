@@ -11,15 +11,22 @@ Public statistics portal and local admin tool for the Hiram Walker Pickleball Le
 | **Public site** | Fully static — built from a snapshot of the database (`public/data/stats/`) and deployed to GitHub Pages |
 | **Hosting** | [GitHub Pages](https://scottjahn.github.io/hwpl-manager/) — free, push-to-deploy via GitHub Actions |
 
-The public site has no live backend. All stats are pre-computed at build time and served as static JSON.
+The public site has no live backend. `npm run export` writes two files — `matches-full.json`
+(every match, with participants) and `leagues.json` — and the browser derives every table on the
+page from them: standings, per-session court results, recent matches, and the league filter.
 
 ## Features
 
 - Public stats dashboard — player, team, and league tables with drill-down detail pages
+- League picker on the main page (All Leagues, then newest start date first) — every stat on
+  that page is scoped to the selection, which defaults to the most recent league. Team and
+  player detail pages stay cross-league on purpose.
+- Optional per-league announcement (raw HTML) shown under the picker, edited in the admin panel
 - Session summary — per-court match results for a selected date
 - Player and team URLs use readable slugs (`/player/alice-nguyen`, `/team/smashers`)
 - Local-only admin panel at `/admin` (only accessible during `npm run dev`)
   - Full CRUD for players, teams, leagues, courts, locations, and matches
+  - Per-league HTML message editor with a live preview (Manage Leagues)
   - Matches record a location (venue); the location flagged as default is pre-selected
   - Court assignment planner with drag-and-drop
   - DUPR CSV export by date
@@ -102,8 +109,9 @@ npm run export
 The SQLite database lives at `data/hwpl.db` (gitignored). Schema is in `database/schema.sqlite.sql`.
 
 `tools/db.mjs` applies the schema on every open, plus a small idempotent migration step: it adds
-`matches.location_id` to older databases, seeds the club's home venue (WFCU Centre Sports Gym) when
-the `locations` table is empty, and assigns the default location to any match that has none.
+`matches.location_id` and `leagues.message_html` to older databases, seeds the club's home venue
+(WFCU Centre Sports Gym) when the `locations` table is empty, and assigns the default location to
+any match that has none.
 
 To back up: copy `data/hwpl.db` somewhere safe. The NAS is a good home for the canonical copy.
 
@@ -151,8 +159,8 @@ src/                    React + TypeScript frontend
 tools/
   admin-server.mjs      Local Express admin API (ops/*, stats/*, exports/dupr)
   db.mjs                SQLite data layer (better-sqlite3)
-  stats.mjs             Pure-JS stat computation (port of the original SQL queries)
-  export.mjs            Dump SQLite → public/data/stats/
+  stats.mjs             Flattens SQLite rows into the two JSON shapes the site fetches
+  export.mjs            Dump SQLite → public/data/stats/ (matches-full.json, leagues.json)
   seed.mjs              Demo data seeder
   import-from-azure.mjs One-time Azure SQL → SQLite importer
   create-favicon.mjs    Generate public/favicon.ico from the logo (macOS)

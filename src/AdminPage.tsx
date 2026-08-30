@@ -79,7 +79,8 @@ const emptyLeagueForm: LeagueForm = {
   name: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: new Date().toISOString().slice(0, 10),
-  isActive: true
+  isActive: true,
+  messageHtml: ""
 };
 
 const emptyCourtForm: CourtForm = {
@@ -1926,12 +1927,33 @@ git push`}</pre>
                 <option value="no">No</option>
               </select>
             </label>
+            <label>
+              League Message (HTML, optional)
+              <textarea
+                className="html-editor"
+                rows={6}
+                spellCheck={false}
+                placeholder={'Shown under the league picker on the stats page, e.g.\n<p><strong>Playoffs start Sept 12.</strong> Check the schedule.</p>'}
+                value={leagueForm.messageHtml}
+                onChange={(e) => setLeagueForm((prev) => ({ ...prev, messageHtml: e.target.value }))}
+              />
+            </label>
+            {leagueForm.messageHtml.trim() ? (
+              <div className="html-preview">
+                <span className="html-preview-label">Preview</span>
+                {/* Admin-authored content on a local-only tool — rendered as written. */}
+                <div dangerouslySetInnerHTML={{ __html: leagueForm.messageHtml }} />
+              </div>
+            ) : null}
             <button type="submit">{editingLeagueId ? "Update League" : "Add League"}</button>
           </form>
           <ul className="entity-list">
             {leagues.map((league) => (
               <li key={league.id}>
-                <span>{league.name} ({formatLeagueDates(league)})</span>
+                <span>
+                  {league.name} ({formatLeagueDates(league)})
+                  {league.messageHtml?.trim() ? <> - has message</> : null}
+                </span>
                 <div>
                   <button
                     type="button"
@@ -1941,7 +1963,8 @@ git push`}</pre>
                         name: league.name,
                         startDate: league.startDate,
                         endDate: league.endDate,
-                        isActive: league.isActive
+                        isActive: league.isActive,
+                        messageHtml: league.messageHtml ?? ""
                       });
                     }}
                   >

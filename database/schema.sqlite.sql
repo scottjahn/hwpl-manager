@@ -7,12 +7,15 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS leagues (
-  id         TEXT    PRIMARY KEY,
-  name       TEXT    NOT NULL,
-  start_date TEXT    NOT NULL,            -- ISO date (YYYY-MM-DD)
-  end_date   TEXT    NOT NULL,
-  is_active  INTEGER NOT NULL DEFAULT 1,  -- 0/1
-  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  id           TEXT    PRIMARY KEY,
+  name         TEXT    NOT NULL,
+  start_date   TEXT    NOT NULL,            -- ISO date (YYYY-MM-DD)
+  end_date     TEXT    NOT NULL,
+  is_active    INTEGER NOT NULL DEFAULT 1,  -- 0/1
+  -- Optional announcement shown under the league picker on the public stats
+  -- page. Raw HTML, authored by the admin in the local admin panel.
+  message_html TEXT    NOT NULL DEFAULT '',
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS teams (

@@ -9,7 +9,7 @@
 
 import express from 'express';
 import { getDb, newId, loadRaw, defaultLocationId, DB_PATH } from './db.mjs';
-import { computeAll, computeSession, buildIndexes } from './stats.mjs';
+import { computeAll } from './stats.mjs';
 
 const PORT = Number(process.env.HWPL_ADMIN_PORT ?? 8787);
 const app = express();
@@ -41,55 +41,25 @@ app.get('/api/ops/diagnostics', (_req, res) => {
 });
 
 // ─── stats (read-only, computed from SQLite) ─────────────────────────────────
-// These mirror the public /api/stats/* Azure Functions so the admin panel's
-// entity pickers (leagues, teams, courts, players) are always up to date.
+// The dev-mode counterparts of the two static files the public site fetches
+// (see src/dataSource.ts); Vite proxies /api/stats/* here during `npm run dev`
+// so the stats page runs against the live database.
 
-const withStats = async (res, fn) => {
+const withStats = (res, pick) => {
   try {
-    const raw = loadRaw();
-    const all = computeAll(raw);
-    fn(raw, all);
+    send(res, pick(computeAll(loadRaw())));
   } catch (e) {
     console.error(e);
     fail(res, String(e), 500);
   }
 };
 
-app.get('/api/stats/players', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.players));
-});
-
-app.get('/api/stats/teams', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.teams));
-});
-
-app.get('/api/stats/matches', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.matches));
-});
-
 app.get('/api/stats/matches-full', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.matchesFull));
+  withStats(res, (all) => all.matchesFull);
 });
 
 app.get('/api/stats/leagues', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.leagues));
-});
-
-app.get('/api/stats/session-dates', (_req, res) => {
-  withStats(res, (_raw, all) => send(res, all.sessionDates));
-});
-
-app.get('/api/stats/session', (req, res) => {
-  const date = req.query.date;
-  if (!date) return fail(res, "Missing query param: date");
-  try {
-    const raw = loadRaw();
-    const idx = buildIndexes(raw);
-    send(res, computeSession(raw, idx, date));
-  } catch (e) {
-    console.error(e);
-    fail(res, String(e), 500);
-  }
+  withStats(res, (all) => all.leagues);
 });
 
 // ─── Admin CRUD helpers ───────────────────────────────────────────────────────
@@ -313,37 +283,45 @@ app.delete('/api/ops/locations/:id', (req, res) => {
 app.get('/api/ops/leagues', (_req, res) => {
   try {
     const rows = getDb().prepare(
-      `SELECT id, name, start_date AS startDate, end_date AS endDate, is_active AS isActive
+      `SELECT id, name, start_date AS startDate, end_date AS endDate, is_active AS isActive,
+              message_html AS messageHtml
        FROM leagues ORDER BY start_date DESC, name`
-    ).all().map((r) => ({ ...r, isActive: bool(r.isActive) }));
+    ).all().map((r) => ({ ...r, isActive: bool(r.isActive), messageHtml: r.messageHtml ?? '' }));
     send(res, rows);
   } catch (e) { fail(res, String(e), 500); }
 });
 
 app.post('/api/ops/leagues', (req, res) => {
   try {
-    const { name, startDate, endDate, isActive } = req.body ?? {};
+    const { name, startDate, endDate, isActive, messageHtml } = req.body ?? {};
     if (!name) return fail(res, 'Field name is required.');
     if (!startDate) return fail(res, "Field 'startDate' is required.");
     if (!endDate) return fail(res, "Field 'endDate' is required.");
     if (endDate < startDate) return fail(res, "Field 'endDate' cannot be earlier than 'startDate'.");
     const id = newId();
     getDb().prepare(
-      `INSERT INTO leagues (id, name, start_date, end_date, is_active) VALUES (?, ?, ?, ?, ?)`
-    ).run(id, name, startDate, endDate, isActive !== false ? 1 : 0);
+      `INSERT INTO leagues (id, name, start_date, end_date, is_active, message_html)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(id, name, startDate, endDate, isActive !== false ? 1 : 0, messageHtml ?? '');
     send(res, { id }, 201);
   } catch (e) { fail(res, String(e), 500); }
 });
 
 app.put('/api/ops/leagues/:id', (req, res) => {
   try {
-    const { name, startDate, endDate, isActive } = req.body ?? {};
+    const { name, startDate, endDate, isActive, messageHtml } = req.body ?? {};
     if (!startDate) return fail(res, "Field 'startDate' is required.");
     if (!endDate) return fail(res, "Field 'endDate' is required.");
     if (endDate < startDate) return fail(res, "Field 'endDate' cannot be earlier than 'startDate'.");
+    // messageHtml is optional: callers that omit it (e.g. the Activate /
+    // Deactivate buttons) leave the saved message untouched.
     const r = getDb().prepare(
-      `UPDATE leagues SET name=?, start_date=?, end_date=?, is_active=? WHERE id=?`
-    ).run(name, startDate, endDate, isActive !== false ? 1 : 0, req.params.id);
+      `UPDATE leagues
+       SET name=?, start_date=?, end_date=?, is_active=?,
+           message_html = COALESCE(?, message_html)
+       WHERE id=?`
+    ).run(name, startDate, endDate, isActive !== false ? 1 : 0,
+          messageHtml === undefined ? null : String(messageHtml), req.params.id);
     if (r.changes === 0) return fail(res, 'League not found.', 404);
     send(res, { updated: true });
   } catch (e) { fail(res, String(e), 500); }

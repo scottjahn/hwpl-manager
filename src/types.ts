@@ -1,5 +1,4 @@
 export type TeamSide = "A" | "B";
-export type Persona = "user" | "admin";
 
 export interface League {
   id: string;
@@ -7,6 +6,8 @@ export interface League {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  /** Optional announcement HTML shown under the league picker on the stats page. */
+  messageHtml: string;
 }
 
 export interface Court {
@@ -39,22 +40,6 @@ export interface Player {
   isActive: boolean;
 }
 
-export interface Match {
-  id: string;
-  leagueId: string;
-  courtId: string;
-  locationId: string;
-  scoringType: "Sideout" | "Rally";
-  gameType: "Doubles" | "Ladder";
-  date: string;
-  teamAId: string | null;
-  teamBId: string | null;
-  teamAPlayers: [string, string];
-  teamBPlayers: [string, string];
-  scoreA: number;
-  scoreB: number;
-}
-
 export interface StatsRow {
   id: string;
   name: string;
@@ -73,17 +58,10 @@ export interface LeagueStatRow {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  // Optional: a static snapshot exported before league messages existed won't have it.
+  messageHtml?: string;
   matches: number;
   avgPointsPerMatch: number;
-}
-
-export interface RecentMatch {
-  id: string;
-  date: string;
-  teamA: string;
-  teamB: string;
-  scoreA: number;
-  scoreB: number;
 }
 
 export interface MatchParticipantDetail {
