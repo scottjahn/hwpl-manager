@@ -75,13 +75,19 @@ const emptyTeamForm: TeamForm = {
   isActive: true
 };
 
-const emptyLeagueForm: LeagueForm = {
+// YYYY-MM-DD in the browser's local timezone (toISOString() would give the UTC date).
+const getLocalDateString = (date = new Date()) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const createEmptyLeagueForm = (): LeagueForm => ({
   name: "",
-  startDate: new Date().toISOString().slice(0, 10),
-  endDate: new Date().toISOString().slice(0, 10),
+  startDate: getLocalDateString(),
+  endDate: getLocalDateString(),
   isActive: true,
   messageHtml: ""
-};
+});
 
 const emptyCourtForm: CourtForm = {
   name: "",
@@ -247,7 +253,7 @@ function AdminPage() {
 
   const [playerForm, setPlayerForm] = useState<PlayerForm>({ ...emptyPlayerForm });
   const [teamForm, setTeamForm] = useState<TeamForm>({ ...emptyTeamForm });
-  const [leagueForm, setLeagueForm] = useState<LeagueForm>({ ...emptyLeagueForm });
+  const [leagueForm, setLeagueForm] = useState<LeagueForm>(createEmptyLeagueForm());
   const [courtForm, setCourtForm] = useState<CourtForm>({ ...emptyCourtForm });
   const [locationForm, setLocationForm] = useState<LocationForm>({ ...emptyLocationForm });
 
@@ -266,7 +272,7 @@ function AdminPage() {
     locationId: "",
     scoringType: "Sideout",
     gameType: "Doubles",
-    date: new Date().toISOString().slice(0, 10),
+    date: getLocalDateString(),
     teamAId: "",
     teamBId: "",
     teamAPlayer1: "",
@@ -494,15 +500,12 @@ function AdminPage() {
 
   const getPreferredPlayerPairForTeam = (teamId: string, excludedIds: string[]): [string, string] => {
     const excluded = new Set(excludedIds.filter(Boolean));
+    // Only prefill the team's own default players; leave remaining slots on "Select a player…".
     const teamDefaults = activePlayers
       .filter((player) => player.defaultTeamId === teamId)
       .map((player) => player.id)
       .filter((id) => !excluded.has(id));
-    const fallback = activePlayers
-      .map((player) => player.id)
-      .filter((id) => !excluded.has(id) && !teamDefaults.includes(id));
-    const candidates = [...teamDefaults, ...fallback];
-    return [candidates[0] ?? "", candidates[1] ?? ""];
+    return [teamDefaults[0] ?? "", teamDefaults[1] ?? ""];
   };
 
   const formatLeagueDates = (league: Pick<League, "startDate" | "endDate">) => `${league.startDate} to ${league.endDate}`;
@@ -967,7 +970,7 @@ function AdminPage() {
       if (!res.ok) throw new Error("failed");
       showWidgetMessage("leagues", editingLeagueId ? "League updated." : "League added.");
       setEditingLeagueId(null);
-      setLeagueForm({ ...emptyLeagueForm });
+      setLeagueForm(createEmptyLeagueForm());
       await loadAdminData();
     } catch {
       showWidgetMessage("leagues", "Error saving league.", true);
