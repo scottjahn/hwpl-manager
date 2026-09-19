@@ -169,6 +169,56 @@ const getOpponentTeamForPlayer = (match: PublicMatch, playerId: string) => {
   return { id: match.teamAId, name: match.teamAName };
 };
 
+/**
+ * League picker state for the detail views. Mirrors the main page: options run
+ * newest start date first, "All Leagues" sits above them, and the newest league
+ * is selected once the option list is known. Empty until then, so the first
+ * paint never shows unfiltered totals.
+ */
+const useLeaguePicker = (leagueOptions: { id: string; name: string; startDate: string }[]) => {
+  const [selectedLeagueId, setSelectedLeagueId] = useState("");
+
+  useEffect(() => {
+    if (leagueOptions.length === 0) return;
+    setSelectedLeagueId((prev) =>
+      prev === ALL_LEAGUES || leagueOptions.some((l) => l.id === prev)
+        ? prev
+        : leagueOptions[0].id
+    );
+  }, [leagueOptions]);
+
+  return [selectedLeagueId, setSelectedLeagueId] as const;
+};
+
+const LeaguePicker = ({
+  id,
+  value,
+  options,
+  onChange
+}: {
+  id: string;
+  value: string;
+  options: { id: string; name: string }[];
+  onChange: (value: string) => void;
+}) => (
+  options.length === 0 ? null : (
+    <div className="league-picker">
+      <label htmlFor={id}>League</label>
+      <select
+        id={id}
+        className="league-picker-select"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value={ALL_LEAGUES}>All Leagues</option>
+        {options.map((league) => (
+          <option key={league.id} value={league.id}>{league.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+);
+
 const TeamDetailView = ({
   teamId,
   matches,
@@ -187,6 +237,27 @@ const TeamDetailView = ({
     [matches, teamId]
   );
 
+  // Built from every match this team played, so the picker keeps all of its
+  // seasons even while the page is scoped to one of them.
+  const leagueOptions = useMemo(() => {
+    const leagues = new Map<string, { name: string; startDate: string }>();
+    for (const match of teamMatches) {
+      leagues.set(match.leagueId, { name: match.leagueName, startDate: match.leagueStartDate });
+    }
+    return Array.from(leagues.entries())
+      .map(([id, value]) => ({ id, name: value.name, startDate: value.startDate }))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
+  }, [teamMatches]);
+
+  const [selectedLeagueId, setSelectedLeagueId] = useLeaguePicker(leagueOptions);
+
+  // The slice every table on this page is derived from.
+  const leagueMatches = useMemo(() => {
+    if (selectedLeagueId === ALL_LEAGUES) return teamMatches;
+    if (!selectedLeagueId) return [];
+    return teamMatches.filter((match) => match.leagueId === selectedLeagueId);
+  }, [selectedLeagueId, teamMatches]);
+
   const leagueAggregates = useMemo(() => {
     const leagues = new Map<string, {
       leagueId: string;
@@ -196,7 +267,7 @@ const TeamDetailView = ({
       courts: Map<string, { name: string; acc: StatAccumulator }>;
     }>();
 
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       const side = match.teamAId === teamId ? "A" : "B";
       const pointsFor = side === "A" ? match.scoreA : match.scoreB;
       const pointsAgainst = side === "A" ? match.scoreB : match.scoreA;
@@ -228,12 +299,12 @@ const TeamDetailView = ({
           .sort(byGamesPlayedDesc)
       }))
       .sort(byLeagueDesc);
-  }, [teamMatches, teamId]);
+  }, [leagueMatches, teamId]);
 
   const teamPlayerRows = useMemo(() => {
     const players = new Map<string, StatAccumulator>();
 
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       const teamOnSideA = match.teamAId === teamId;
       const pointsFor = teamOnSideA ? match.scoreA : match.scoreB;
       const pointsAgainst = teamOnSideA ? match.scoreB : match.scoreA;
@@ -248,7 +319,7 @@ const TeamDetailView = ({
     return Array.from(players.entries())
       .map(([playerId, acc]) => toStatsRow(playerId, playerNameById.get(playerId) ?? "Unknown Player", acc))
       .sort(byGamesPlayedDesc);
-  }, [playerNameById, teamMatches, teamId]);
+  }, [playerNameById, leagueMatches, teamId]);
 
   const versusRows = useMemo(() => {
     const rows = new Map<string, {
@@ -259,7 +330,7 @@ const TeamDetailView = ({
       acc: StatAccumulator;
     }>();
 
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       const side = match.teamAId === teamId ? "A" : "B";
       const opponentId = side === "A" ? match.teamBId : match.teamAId;
       const opponentName = side === "A" ? match.teamBName : match.teamAName;
@@ -292,56 +363,44 @@ const TeamDetailView = ({
         || a.row.name.localeCompare(b.row.name)
         || byLeagueDesc(a, b)
       ));
-  }, [teamMatches, teamId]);
-
-  const leagueOptions = useMemo(() => {
-    const leagues = new Map<string, { name: string; startDate: string }>();
-    for (const match of teamMatches) {
-      leagues.set(match.leagueId, { name: match.leagueName, startDate: match.leagueStartDate });
-    }
-    return Array.from(leagues.entries())
-      .map(([id, value]) => ({ id, name: value.name, startDate: value.startDate }))
-      .sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
-  }, [teamMatches]);
+  }, [leagueMatches, teamId]);
 
   const opponentOptions = useMemo(() => {
     const teams = new Map<string, string>();
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       if (match.teamAId === teamId && match.teamBId) teams.set(match.teamBId, match.teamBName);
       if (match.teamBId === teamId && match.teamAId) teams.set(match.teamAId, match.teamAName);
     }
     return Array.from(teams.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [teamMatches, teamId]);
+  }, [leagueMatches, teamId]);
 
   const playerOptions = useMemo(() => {
     const players = new Set<string>();
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       for (const participant of match.participants) players.add(participant.playerId);
     }
     return Array.from(players)
       .map((id) => ({ id, name: playerNameById.get(id) ?? "Unknown Player" }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [playerNameById, teamMatches]);
+  }, [playerNameById, leagueMatches]);
 
-  const dateOptions = useMemo(() => Array.from(new Set(teamMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [teamMatches]);
+  const dateOptions = useMemo(() => Array.from(new Set(leagueMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [leagueMatches]);
 
   const courtOptions = useMemo(() => {
     const courts = new Map<string, string>();
-    for (const match of teamMatches) {
+    for (const match of leagueMatches) {
       if (match.courtId) courts.set(match.courtId, match.courtName);
     }
     return Array.from(courts.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [teamMatches]);
+  }, [leagueMatches]);
 
-  const [leagueFilter, setLeagueFilter] = useState("");
   const [opponentFilter, setOpponentFilter] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [courtFilter, setCourtFilter] = useState("");
 
   const filteredMatches = useMemo(
-    () => teamMatches.filter((match) => {
-      if (leagueFilter && match.leagueId !== leagueFilter) return false;
+    () => leagueMatches.filter((match) => {
       if (dateFilter && match.date !== dateFilter) return false;
       if (courtFilter && match.courtId !== courtFilter) return false;
 
@@ -351,7 +410,7 @@ const TeamDetailView = ({
       if (playerFilter && !match.participants.some((participant) => participant.playerId === playerFilter)) return false;
       return true;
     }),
-    [courtFilter, dateFilter, leagueFilter, opponentFilter, playerFilter, teamId, teamMatches]
+    [courtFilter, dateFilter, leagueMatches, opponentFilter, playerFilter, teamId]
   );
 
   return (
@@ -361,6 +420,12 @@ const TeamDetailView = ({
         <h1>{teamName}</h1>
         <p>League and court performance, player contributions, opponents, and full match history.</p>
         <p><a className="hero-link" href={withBase("/")}>Back to main dashboard</a></p>
+        <LeaguePicker
+          id="team-league-select"
+          value={selectedLeagueId}
+          options={leagueOptions}
+          onChange={setSelectedLeagueId}
+        />
       </section>
 
       <section className="panel">
@@ -521,14 +586,7 @@ const TeamDetailView = ({
                     ))}
                   </select>
                 </th>
-                <th>
-                  <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
-                    <option value="">All leagues</option>
-                    {leagueOptions.map((league) => (
-                      <option key={league.id} value={league.id}>{league.name}</option>
-                    ))}
-                  </select>
-                </th>
+                <th />
                 <th>
                   <select value={courtFilter} onChange={(event) => setCourtFilter(event.target.value)}>
                     <option value="">No Filter</option>
@@ -606,6 +664,27 @@ const PlayerDetailView = ({
     [matches, playerId]
   );
 
+  // Built from every match this player appeared in, so the picker keeps all of
+  // their seasons even while the page is scoped to one of them.
+  const leagueOptions = useMemo(() => {
+    const leagues = new Map<string, { name: string; startDate: string }>();
+    for (const match of playerMatches) {
+      leagues.set(match.leagueId, { name: match.leagueName, startDate: match.leagueStartDate });
+    }
+    return Array.from(leagues.entries())
+      .map(([id, value]) => ({ id, name: value.name, startDate: value.startDate }))
+      .sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
+  }, [playerMatches]);
+
+  const [selectedLeagueId, setSelectedLeagueId] = useLeaguePicker(leagueOptions);
+
+  // The slice every table on this page is derived from.
+  const leagueMatches = useMemo(() => {
+    if (selectedLeagueId === ALL_LEAGUES) return playerMatches;
+    if (!selectedLeagueId) return [];
+    return playerMatches.filter((match) => match.leagueId === selectedLeagueId);
+  }, [playerMatches, selectedLeagueId]);
+
   const leagueTeamCourtBreakdown = useMemo(() => {
     const leagues = new Map<string, {
       leagueId: string;
@@ -615,7 +694,7 @@ const PlayerDetailView = ({
       teams: Map<string, { label: string; overall: StatAccumulator; courts: Map<string, { name: string; acc: StatAccumulator }> }>;
     }>();
 
-    for (const match of playerMatches) {
+    for (const match of leagueMatches) {
       const side = getPlayerSideForMatch(match, playerId);
       if (!side) continue;
 
@@ -667,7 +746,7 @@ const PlayerDetailView = ({
           .sort((a, b) => byGamesPlayedDesc(a.overall, b.overall))
       }))
       .sort(byLeagueDesc);
-  }, [playerId, playerMatches]);
+  }, [playerId, leagueMatches]);
 
   const versusPlayers = useMemo(() => {
     const rows = new Map<string, {
@@ -678,7 +757,7 @@ const PlayerDetailView = ({
       acc: StatAccumulator;
     }>();
 
-    for (const match of playerMatches) {
+    for (const match of leagueMatches) {
       const side = getPlayerSideForMatch(match, playerId);
       if (!side) continue;
 
@@ -712,21 +791,11 @@ const PlayerDetailView = ({
         || a.row.name.localeCompare(b.row.name)
         || byLeagueDesc(a, b)
       ));
-  }, [playerId, playerMatches]);
-
-  const leagueOptions = useMemo(() => {
-    const leagues = new Map<string, { name: string; startDate: string }>();
-    for (const match of playerMatches) {
-      leagues.set(match.leagueId, { name: match.leagueName, startDate: match.leagueStartDate });
-    }
-    return Array.from(leagues.entries())
-      .map(([id, value]) => ({ id, name: value.name, startDate: value.startDate }))
-      .sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
-  }, [playerMatches]);
+  }, [playerId, leagueMatches]);
 
   const teamOptions = useMemo(() => {
     const teams = new Map<string, string>();
-    for (const match of playerMatches) {
+    for (const match of leagueMatches) {
       const teamMeta = getPlayerTeamKeyAndLabel(match, playerId);
       if (!teamMeta.key) continue;
       const label = teamMeta.key === "ladder"
@@ -737,11 +806,11 @@ const PlayerDetailView = ({
     return Array.from(teams.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [playerId, playerMatches, teamNameById]);
+  }, [playerId, leagueMatches, teamNameById]);
 
   const relatedPlayerOptions = useMemo(() => {
     const players = new Set<string>();
-    for (const match of playerMatches) {
+    for (const match of leagueMatches) {
       for (const participant of match.participants) {
         if (participant.playerId !== playerId) players.add(participant.playerId);
       }
@@ -749,27 +818,25 @@ const PlayerDetailView = ({
     return Array.from(players)
       .map((id) => ({ id, name: playerNameById.get(id) ?? "Unknown Player" }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [playerId, playerMatches, playerNameById]);
+  }, [playerId, leagueMatches, playerNameById]);
 
-  const dateOptions = useMemo(() => Array.from(new Set(playerMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [playerMatches]);
+  const dateOptions = useMemo(() => Array.from(new Set(leagueMatches.map((match) => match.date))).sort((a, b) => b.localeCompare(a)), [leagueMatches]);
 
   const courtOptions = useMemo(() => {
     const courts = new Map<string, string>();
-    for (const match of playerMatches) {
+    for (const match of leagueMatches) {
       if (match.courtId) courts.set(match.courtId, match.courtName);
     }
     return Array.from(courts.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [playerMatches]);
+  }, [leagueMatches]);
 
-  const [leagueFilter, setLeagueFilter] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [courtFilter, setCourtFilter] = useState("");
 
   const filteredMatches = useMemo(
-    () => playerMatches.filter((match) => {
-      if (leagueFilter && match.leagueId !== leagueFilter) return false;
+    () => leagueMatches.filter((match) => {
       if (dateFilter && match.date !== dateFilter) return false;
       if (courtFilter && match.courtId !== courtFilter) return false;
 
@@ -779,7 +846,7 @@ const PlayerDetailView = ({
       if (playerFilter && !match.participants.some((participant) => participant.playerId === playerFilter)) return false;
       return true;
     }),
-    [courtFilter, dateFilter, leagueFilter, playerFilter, playerId, playerMatches, teamFilter]
+    [courtFilter, dateFilter, leagueMatches, playerFilter, playerId, teamFilter]
   );
 
   return (
@@ -789,6 +856,12 @@ const PlayerDetailView = ({
         <h1>{playerName}</h1>
         <p>League/team/court performance, head-to-head trends, and complete match history.</p>
         <p><a className="hero-link" href={withBase("/")}>Back to main dashboard</a></p>
+        <LeaguePicker
+          id="player-league-select"
+          value={selectedLeagueId}
+          options={leagueOptions}
+          onChange={setSelectedLeagueId}
+        />
       </section>
 
       <section className="panel">
@@ -947,14 +1020,7 @@ const PlayerDetailView = ({
                     ))}
                   </select>
                 </th>
-                <th>
-                  <select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}>
-                    <option value="">All leagues</option>
-                    {leagueOptions.map((league) => (
-                      <option key={league.id} value={league.id}>{league.name}</option>
-                    ))}
-                  </select>
-                </th>
+                <th />
                 <th>
                   <select value={courtFilter} onChange={(event) => setCourtFilter(event.target.value)}>
                     <option value="">No Filter</option>
