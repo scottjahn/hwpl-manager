@@ -1640,7 +1640,7 @@ function App() {
             )}
             <a className="admin-link" href="mailto:scott.jahn@gmail.com">Contact</a>
             <span className="admin-entry-sep" aria-hidden="true">·</span>
-            <a className="admin-link" href="https://github.com/scottjahn/hwpl-manager/issues">Feedback</a>
+            <a className="admin-link" href="https://github.com/scottjahn/hwpl-manager/issues">Report Issue</a>
           </footer>
         </>
       )}
