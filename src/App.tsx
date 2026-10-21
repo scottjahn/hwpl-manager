@@ -1089,6 +1089,7 @@ function App() {
 
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [sessionView, setSessionView] = useState<"teams" | "players">("teams");
 
   const [teamCourtFilter, setTeamCourtFilter] = useState<string>("");
 
@@ -1210,15 +1211,35 @@ function App() {
     const courts = new Map<string, {
       courtName: string;
       doubles: Map<string, { name: string; acc: StatAccumulator }>;
+      players: Map<string, { name: string; acc: StatAccumulator }>;
       ladder: Map<string, { name: string; acc: StatAccumulator }>;
     }>();
     const ensure = (courtId: string, courtName: string) => {
       const existing = courts.get(courtId);
       if (existing) return existing;
-      const created = { courtName, doubles: new Map(), ladder: new Map() };
+      const created = { courtName, doubles: new Map(), players: new Map(), ladder: new Map() };
       courts.set(courtId, created);
       return created;
     };
+    const bumpPlayers = (
+      target: Map<string, { name: string; acc: StatAccumulator }>,
+      m: PublicMatch
+    ) => {
+      for (const part of m.participants) {
+        const entry = target.get(part.playerId)
+          ?? { name: part.playerName, acc: createAccumulator() };
+        addGame(
+          entry.acc,
+          part.teamSide === "A" ? m.scoreA : m.scoreB,
+          part.teamSide === "A" ? m.scoreB : m.scoreA
+        );
+        target.set(part.playerId, entry);
+      }
+    };
+    const toPlayerRows = (source: Map<string, { name: string; acc: StatAccumulator }>) =>
+      [...source.entries()]
+        .map(([playerId, e]) => ({ playerId, playerName: e.name, ...statBody(e.acc) }))
+        .sort(byWinsDesc);
 
     for (const m of leagueMatches) {
       if (m.date !== selectedDate || !m.courtId) continue;
@@ -1232,18 +1253,11 @@ function App() {
         };
         bump(m.teamAId, m.teamAName, m.scoreA, m.scoreB);
         bump(m.teamBId, m.teamBName, m.scoreB, m.scoreA);
+        bumpPlayers(court.players, m);
       } else if (m.gameType === "Ladder") {
         const court = ensure(m.courtId, m.courtName);
-        for (const part of m.participants) {
-          const entry = court.ladder.get(part.playerId)
-            ?? { name: part.playerName, acc: createAccumulator() };
-          addGame(
-            entry.acc,
-            part.teamSide === "A" ? m.scoreA : m.scoreB,
-            part.teamSide === "A" ? m.scoreB : m.scoreA
-          );
-          court.ladder.set(part.playerId, entry);
-        }
+        bumpPlayers(court.ladder, m);
+        bumpPlayers(court.players, m);
       }
     }
 
@@ -1254,15 +1268,39 @@ function App() {
         doubles: [...court.doubles.entries()]
           .map(([teamId, e]) => ({ teamId, teamName: e.name, ...statBody(e.acc) }))
           .sort(byWinsDesc),
-        ladder: [...court.ladder.entries()]
-          .map(([playerId, e]) => ({ playerId, playerName: e.name, ...statBody(e.acc) }))
-          .sort(byWinsDesc)
+        players: toPlayerRows(court.players),
+        ladder: toPlayerRows(court.ladder)
       }))
       .sort((a, b) => a.courtName.localeCompare(b.courtName));
   }, [leagueMatches, selectedDate]);
 
   // leagueMatches keeps the export order: match date DESC, then entry order.
   const recentMatches = useMemo(() => leagueMatches.slice(0, 10), [leagueMatches]);
+
+  // Teams view splits each court into Doubles (teams) and Ladder (players);
+  // Players view is one table per court covering every game type.
+  const sessionSections = (court: SessionCourtEntry) => {
+    const playerRows = (rows: SessionCourtEntry["players"]) => rows.map((row) => ({
+      key: row.playerId,
+      link: <PlayerLink id={row.playerId} name={row.playerName} />,
+      row
+    }));
+    if (sessionView === "players") {
+      return [{ title: court.courtName, label: "Player", rows: playerRows(court.players) }];
+    }
+    return [
+      {
+        title: `${court.courtName} — Doubles`,
+        label: "Team",
+        rows: court.doubles.map((row) => ({
+          key: row.teamId,
+          link: <TeamLink id={row.teamId} name={row.teamName} />,
+          row
+        }))
+      },
+      { title: `${court.courtName} — Ladder`, label: "Player", rows: playerRows(court.ladder) }
+    ].filter((section) => section.rows.length > 0);
+  };
 
   const totalPlayers = playerStats.length;
   const totalTeams = teamStats.length;
@@ -1519,19 +1557,39 @@ function App() {
                     ))}
                   </select>
                 </div>
+                <div className="session-tabs" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sessionView === "teams"}
+                    className={sessionView === "teams" ? "active" : ""}
+                    onClick={() => setSessionView("teams")}
+                  >
+                    Teams
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sessionView === "players"}
+                    className={sessionView === "players" ? "active" : ""}
+                    onClick={() => setSessionView("players")}
+                  >
+                    Players
+                  </button>
+                </div>
                 {sessionData.length === 0 ? (
                   <p>No match data for this date.</p>
                 ) : (
                   sessionData.map((court) => (
                     <div key={court.courtId} style={{ marginBottom: "1.5rem" }}>
-                      {court.doubles.length > 0 && (
-                        <div style={{ marginBottom: "0.75rem" }}>
-                          <h4 style={{ marginBottom: "0.5rem" }}>{court.courtName} — Doubles</h4>
+                      {sessionSections(court).map((section) => (
+                        <div key={section.title} style={{ marginBottom: "0.75rem" }}>
+                          <h4 style={{ marginBottom: "0.5rem" }}>{section.title}</h4>
                           <div className="table-wrap">
                             <table>
                               <thead>
                                 <tr>
-                                  <th>Team</th>
+                                  <th>{section.label}</th>
                                   <th title="Games Played">GP</th>
                                   <th title="Wins">W</th>
                                   <th title="Losses">L</th>
@@ -1542,9 +1600,9 @@ function App() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {court.doubles.map((row) => (
-                                  <tr key={row.teamId}>
-                                    <td><TeamLink id={row.teamId} name={row.teamName} /></td>
+                                {section.rows.map(({ key, link, row }) => (
+                                  <tr key={key}>
+                                    <td>{link}</td>
                                     <td>{row.gamesPlayed}</td>
                                     <td>{row.wins}</td>
                                     <td>{row.losses}</td>
@@ -1558,42 +1616,7 @@ function App() {
                             </table>
                           </div>
                         </div>
-                      )}
-                      {court.ladder.length > 0 && (
-                        <div>
-                          <h4 style={{ marginBottom: "0.5rem" }}>{court.courtName} — Ladder</h4>
-                          <div className="table-wrap">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Player</th>
-                                  <th title="Games Played">GP</th>
-                                  <th title="Wins">W</th>
-                                  <th title="Losses">L</th>
-                                  <th title="Win Percentage">Win %</th>
-                                  <th title="Points For">PF</th>
-                                  <th title="Points Against">PA</th>
-                                  <th title="Point Differential (Points For minus Points Against)">Diff</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {court.ladder.map((row) => (
-                                  <tr key={row.playerId}>
-                                    <td><PlayerLink id={row.playerId} name={row.playerName} /></td>
-                                    <td>{row.gamesPlayed}</td>
-                                    <td>{row.wins}</td>
-                                    <td>{row.losses}</td>
-                                    <td>{(row.winRate * 100).toFixed(0)}%</td>
-                                    <td>{row.pointsFor}</td>
-                                    <td>{row.pointsAgainst}</td>
-                                    <td>{row.differential}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
                   ))
                 )}

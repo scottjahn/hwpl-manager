@@ -814,6 +814,22 @@ button:hover {
   min-width: 180px;
 }
 
+.session-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.session-tabs button {
+  min-width: 110px;
+}
+
+.session-tabs button.active {
+  background: linear-gradient(135deg, #f0d030 0%, #c6a31b 100%);
+  color: #102030;
+  font-weight: 700;
+}
+
 .loading-overlay {
   position: fixed;
   inset: 0;

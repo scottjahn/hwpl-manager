@@ -123,5 +123,7 @@ export interface SessionCourtEntry {
   courtId: string;
   courtName: string;
   doubles: SessionTeamStat[];
+  // Every game on the court (Doubles and Ladder), credited to each player.
+  players: SessionPlayerStat[];
   ladder: SessionPlayerStat[];
 }
