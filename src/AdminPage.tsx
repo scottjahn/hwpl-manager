@@ -183,6 +183,16 @@ const reorderMatchesForFlow = (matches: Array<[string, string]>, previousPair: [
   return ordered;
 };
 
+// Fisher–Yates shuffle; returns a new array.
+const shuffle = <T,>(items: T[]): T[] => {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
 const buildRoundRobinRows = (teamIds: string[]): RoundRobinRow[] => {
   if (teamIds.length < 2) return [];
 
@@ -666,7 +676,9 @@ function AdminPage() {
       return;
     }
 
-    const teamIds = teamsForCourt.map((team) => team.id);
+    // Shuffle so team slots (and who sits out first on a bye) vary week to week
+    // instead of always following alphabetical order.
+    const teamIds = shuffle(teamsForCourt.map((team) => team.id));
     const rows = buildRoundRobinRows(teamIds);
     const gameCount = clampGamesPerMatch(gamesPerCourt[court.id] ?? 2);
     if (!rows.length) {
